@@ -11,6 +11,7 @@
     <nav class="tab-nav">
         <button class="tab-btn" data-tab="debug">Debug Dashboard</button>
         <button class="tab-btn active" data-tab="browse">Browse Mode</button>
+        <button class="tab-btn" data-tab="maps">Maps Mode</button>
     </nav>
 
     <!-- Debug Dashboard View -->
@@ -366,6 +367,197 @@
                 </section>
             </div>
         </article>
+    </div>
+
+    <!-- Maps Mode View -->
+    <div id="maps-view" class="view">
+        <!-- Sticky Debug Bar for Maps -->
+        <div class="debug-bar maps-debug-bar">
+            <div class="state-indicator">
+                <span class="state-label">State:</span>
+                <span id="maps-state" class="state-value">idle</span>
+            </div>
+            <div class="bar-stats">
+                <div class="bar-stat">
+                    <span class="bar-label">Pan:</span>
+                    <span id="maps-pan" class="bar-value">0, 0</span>
+                </div>
+                <div class="bar-stat">
+                    <span class="bar-label">Zoom:</span>
+                    <span id="maps-zoom" class="bar-value">100%</span>
+                    <button id="reset-map-zoom" class="bar-reset-btn">Reset</button>
+                </div>
+                <div class="bar-stat">
+                    <span class="bar-label">Pin:</span>
+                    <span id="maps-pin" class="bar-value">None</span>
+                    <button id="clear-pin" class="bar-reset-btn">Clear</button>
+                </div>
+            </div>
+            <div class="gesture-info">
+                <div class="bar-stat">
+                    <span class="bar-label">Gesture:</span>
+                    <span id="maps-gesture" class="bar-value gesture">-</span>
+                </div>
+                <div class="bar-stat">
+                    <span class="bar-label">Dragging:</span>
+                    <span id="maps-dragging" class="bar-value">No</span>
+                </div>
+            </div>
+            <button id="toggle-maps-log" class="bar-toggle-btn">Hide Log</button>
+        </div>
+
+        <!-- Floating Event Log for Maps -->
+        <div class="floating-event-log maps-event-log">
+            <div class="floating-log-header">
+                <span>Event Log</span>
+                <button id="clear-maps-log" class="clear-btn">Clear</button>
+            </div>
+            <div id="maps-event-log-content" class="log-content"></div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="map-container">
+            <div id="map-viewport" class="map-viewport">
+                <div id="map-content" class="map-content">
+                    <!-- Map Grid/Streets -->
+                    <div class="map-grid">
+                        <!-- Horizontal Streets -->
+                        <div class="street horizontal" style="top: 100px;"><span class="street-name">Oak Street</span></div>
+                        <div class="street horizontal" style="top: 250px;"><span class="street-name">Maple Avenue</span></div>
+                        <div class="street horizontal" style="top: 400px;"><span class="street-name">Pine Road</span></div>
+                        <div class="street horizontal" style="top: 550px;"><span class="street-name">Cedar Lane</span></div>
+                        <div class="street horizontal" style="top: 700px;"><span class="street-name">Elm Boulevard</span></div>
+                        <div class="street horizontal" style="top: 850px;"><span class="street-name">Birch Way</span></div>
+
+                        <!-- Vertical Streets -->
+                        <div class="street vertical" style="left: 150px;"><span class="street-name">1st Ave</span></div>
+                        <div class="street vertical" style="left: 350px;"><span class="street-name">2nd Ave</span></div>
+                        <div class="street vertical" style="left: 550px;"><span class="street-name">3rd Ave</span></div>
+                        <div class="street vertical" style="left: 750px;"><span class="street-name">4th Ave</span></div>
+                        <div class="street vertical" style="left: 950px;"><span class="street-name">5th Ave</span></div>
+                        <div class="street vertical" style="left: 1150px;"><span class="street-name">6th Ave</span></div>
+
+                        <!-- Buildings/Landmarks -->
+                        <div class="building park" style="left: 200px; top: 150px; width: 100px; height: 80px;">
+                            <span>Central Park</span>
+                        </div>
+                        <div class="building" style="left: 400px; top: 150px; width: 80px; height: 60px;">
+                            <span>Library</span>
+                        </div>
+                        <div class="building" style="left: 600px; top: 130px; width: 100px; height: 100px;">
+                            <span>Mall</span>
+                        </div>
+                        <div class="building hospital" style="left: 850px; top: 150px; width: 70px; height: 70px;">
+                            <span>Hospital</span>
+                        </div>
+
+                        <div class="building" style="left: 180px; top: 300px; width: 60px; height: 50px;">
+                            <span>Cafe</span>
+                        </div>
+                        <div class="building school" style="left: 400px; top: 280px; width: 90px; height: 90px;">
+                            <span>School</span>
+                        </div>
+                        <div class="building" style="left: 620px; top: 300px; width: 70px; height: 60px;">
+                            <span>Bank</span>
+                        </div>
+                        <div class="building park" style="left: 800px; top: 280px; width: 120px; height: 100px;">
+                            <span>Riverside Park</span>
+                        </div>
+
+                        <div class="building" style="left: 200px; top: 450px; width: 80px; height: 70px;">
+                            <span>Hotel</span>
+                        </div>
+                        <div class="building" style="left: 380px; top: 460px; width: 100px; height: 60px;">
+                            <span>Supermarket</span>
+                        </div>
+                        <div class="building" style="left: 580px; top: 440px; width: 60px; height: 80px;">
+                            <span>Office</span>
+                        </div>
+                        <div class="building" style="left: 780px; top: 450px; width: 90px; height: 70px;">
+                            <span>Restaurant</span>
+                        </div>
+                        <div class="building" style="left: 1000px; top: 440px; width: 80px; height: 80px;">
+                            <span>Museum</span>
+                        </div>
+
+                        <div class="building park" style="left: 180px; top: 600px; width: 140px; height: 80px;">
+                            <span>Sports Field</span>
+                        </div>
+                        <div class="building" style="left: 420px; top: 610px; width: 70px; height: 60px;">
+                            <span>Gym</span>
+                        </div>
+                        <div class="building" style="left: 600px; top: 590px; width: 100px; height: 90px;">
+                            <span>Cinema</span>
+                        </div>
+                        <div class="building" style="left: 820px; top: 600px; width: 80px; height: 70px;">
+                            <span>Pharmacy</span>
+                        </div>
+
+                        <div class="building" style="left: 220px; top: 760px; width: 90px; height: 60px;">
+                            <span>Gas Station</span>
+                        </div>
+                        <div class="building school" style="left: 400px; top: 750px; width: 100px; height: 80px;">
+                            <span>University</span>
+                        </div>
+                        <div class="building" style="left: 620px; top: 770px; width: 70px; height: 50px;">
+                            <span>Post Office</span>
+                        </div>
+                        <div class="building hospital" style="left: 820px; top: 750px; width: 90px; height: 80px;">
+                            <span>Clinic</span>
+                        </div>
+                        <div class="building park" style="left: 1000px; top: 740px; width: 130px; height: 100px;">
+                            <span>Lake Park</span>
+                        </div>
+                    </div>
+
+                    <!-- Pin marker (will be positioned via JS) -->
+                    <div id="map-pin" class="map-pin hidden">
+                        <div class="pin-icon">📍</div>
+                        <div class="pin-label">Pin</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right-click Context Menu -->
+            <div id="map-context-menu" class="context-menu hidden">
+                <div class="context-menu-item" data-action="search">
+                    <span class="menu-icon">🔍</span>
+                    <span>Search this location</span>
+                </div>
+                <div class="context-menu-item" data-action="directions">
+                    <span class="menu-icon">🧭</span>
+                    <span>Directions from here</span>
+                </div>
+                <div class="context-menu-item" data-action="add-pin">
+                    <span class="menu-icon">📍</span>
+                    <span>Drop a pin here</span>
+                </div>
+                <div class="context-menu-divider"></div>
+                <div class="context-menu-item" data-action="coordinates">
+                    <span class="menu-icon">📐</span>
+                    <span class="coords-text">Coordinates: --</span>
+                </div>
+                <div class="context-menu-divider"></div>
+                <div class="context-menu-item" data-action="favorite">
+                    <span class="menu-icon">⭐</span>
+                    <span>Add to favorites</span>
+                </div>
+                <div class="context-menu-item" data-action="share">
+                    <span class="menu-icon">📤</span>
+                    <span>Share location</span>
+                </div>
+                <div class="context-menu-item" data-action="print">
+                    <span class="menu-icon">🖨️</span>
+                    <span>Print map</span>
+                </div>
+            </div>
+
+            <div class="map-instructions">
+                <span>🖱️ Drag to pan</span>
+                <span>🔍 Pinch/Ctrl+Scroll to zoom</span>
+                <span>📍 Click to place pin</span>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>

@@ -751,3 +751,353 @@ document.addEventListener('wheel', (e) => {
 
     resetGestureAfterDelay();
 }, { passive: true });
+
+// ==================== //
+// Maps Mode            //
+// ==================== //
+
+// Maps DOM elements
+const mapsView = document.getElementById('maps-view');
+const mapsStateEl = document.getElementById('maps-state');
+const mapsPanEl = document.getElementById('maps-pan');
+const mapsZoomEl = document.getElementById('maps-zoom');
+const mapsPinEl = document.getElementById('maps-pin');
+const mapsGestureEl = document.getElementById('maps-gesture');
+const mapsDraggingEl = document.getElementById('maps-dragging');
+const resetMapZoomBtn = document.getElementById('reset-map-zoom');
+const clearPinBtn = document.getElementById('clear-pin');
+const toggleMapsLogBtn = document.getElementById('toggle-maps-log');
+const mapsEventLog = document.querySelector('.maps-event-log');
+const mapsEventLogContent = document.getElementById('maps-event-log-content');
+const clearMapsLogBtn = document.getElementById('clear-maps-log');
+const mapViewport = document.getElementById('map-viewport');
+const mapContent = document.getElementById('map-content');
+const mapPin = document.getElementById('map-pin');
+
+// Maps state
+let mapZoom = 1.0;
+let mapPanX = 0;
+let mapPanY = 0;
+let mapIsDragging = false;
+let mapDragStartX = 0;
+let mapDragStartY = 0;
+let mapPanStartX = 0;
+let mapPanStartY = 0;
+let mapPinX = null;
+let mapPinY = null;
+let mapsLogVisible = true;
+const MAP_MIN_ZOOM = 0.25;
+const MAP_MAX_ZOOM = 5.0;
+const MAP_ZOOM_SENSITIVITY = 0.01;
+
+// Check if maps mode is active
+function isMapsModeActive() {
+    return mapsView && mapsView.classList.contains('active');
+}
+
+// Update map transform
+function updateMapTransform() {
+    mapContent.style.transform = `translate(${mapPanX}px, ${mapPanY}px) scale(${mapZoom})`;
+    mapsPanEl.textContent = `${Math.round(mapPanX)}, ${Math.round(mapPanY)}`;
+    mapsZoomEl.textContent = `${Math.round(mapZoom * 100)}%`;
+}
+
+// Set maps state
+function setMapsState(state) {
+    mapsStateEl.textContent = state;
+    mapsStateEl.className = 'state-value ' + state;
+}
+
+// Add entry to maps event log
+function addMapsLogEntry(eventName, category) {
+    if (!mapsEventLogContent) return;
+
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${category}`;
+    entry.innerHTML = `<span class="timestamp">${formatTimestamp()}</span><span class="event-name">${eventName}</span>`;
+    mapsEventLogContent.insertBefore(entry, mapsEventLogContent.firstChild);
+
+    while (mapsEventLogContent.children.length > 50) {
+        mapsEventLogContent.removeChild(mapsEventLogContent.lastChild);
+    }
+}
+
+// Map pan/drag handling
+mapViewport.addEventListener('mousedown', (e) => {
+    if (!isMapsModeActive()) return;
+    if (e.button !== 0) return; // Only left click for dragging
+
+    mapIsDragging = true;
+    mapDragStartX = e.clientX;
+    mapDragStartY = e.clientY;
+    mapPanStartX = mapPanX;
+    mapPanStartY = mapPanY;
+
+    mapsDraggingEl.textContent = 'Yes';
+    setMapsState('move');
+    addMapsLogEntry('drag start', 'pointer');
+
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!mapIsDragging) return;
+
+    const deltaX = e.clientX - mapDragStartX;
+    const deltaY = e.clientY - mapDragStartY;
+
+    mapPanX = mapPanStartX + deltaX;
+    mapPanY = mapPanStartY + deltaY;
+
+    updateMapTransform();
+    mapsGestureEl.textContent = 'panning';
+});
+
+document.addEventListener('mouseup', (e) => {
+    if (!mapIsDragging) return;
+
+    mapIsDragging = false;
+    mapsDraggingEl.textContent = 'No';
+    setMapsState('idle');
+    mapsGestureEl.textContent = '-';
+    addMapsLogEntry(`drag end (${Math.round(mapPanX)}, ${Math.round(mapPanY)})`, 'pointer');
+});
+
+// Map zoom handling
+mapViewport.addEventListener('wheel', (e) => {
+    if (!isMapsModeActive()) return;
+
+    e.preventDefault();
+
+    if (e.ctrlKey) {
+        // Pinch-to-zoom
+        const rect = mapViewport.getBoundingClientRect();
+        const cursorX = e.clientX - rect.left;
+        const cursorY = e.clientY - rect.top;
+
+        // Calculate point under cursor in map coordinates
+        const pointX = (cursorX - mapPanX) / mapZoom;
+        const pointY = (cursorY - mapPanY) / mapZoom;
+
+        // Update zoom
+        const oldZoom = mapZoom;
+        const delta = -e.deltaY * MAP_ZOOM_SENSITIVITY;
+        mapZoom = Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, mapZoom + delta));
+
+        // Adjust pan to keep point under cursor stationary
+        mapPanX = cursorX - pointX * mapZoom;
+        mapPanY = cursorY - pointY * mapZoom;
+
+        updateMapTransform();
+        setMapsState('zoom');
+        mapsGestureEl.textContent = e.deltaY < 0 ? 'pinch out' : 'pinch in';
+
+        if (Math.abs(mapZoom - oldZoom) > 0.01) {
+            addMapsLogEntry(`zoom ${e.deltaY < 0 ? 'in' : 'out'} (${Math.round(mapZoom * 100)}%)`, 'zoom');
+        }
+    } else {
+        // Regular scroll to pan
+        mapPanX -= e.deltaX;
+        mapPanY -= e.deltaY;
+
+        updateMapTransform();
+        setMapsState('scroll');
+
+        let scrollDir = '';
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+            scrollDir = e.deltaY > 0 ? '↓' : '↑';
+        } else {
+            scrollDir = e.deltaX > 0 ? '→' : '←';
+        }
+        mapsGestureEl.textContent = `scroll ${scrollDir}`;
+    }
+
+    // Reset state after delay
+    setTimeout(() => {
+        if (!mapIsDragging) {
+            setMapsState('idle');
+            mapsGestureEl.textContent = '-';
+        }
+    }, 200);
+}, { passive: false });
+
+// Map pin placement (click without drag)
+let mapClickStartX = 0;
+let mapClickStartY = 0;
+
+mapViewport.addEventListener('mousedown', (e) => {
+    mapClickStartX = e.clientX;
+    mapClickStartY = e.clientY;
+});
+
+mapViewport.addEventListener('click', (e) => {
+    if (!isMapsModeActive()) return;
+
+    // Check if this was a drag (moved more than 5px)
+    const moveDistance = Math.sqrt(
+        Math.pow(e.clientX - mapClickStartX, 2) +
+        Math.pow(e.clientY - mapClickStartY, 2)
+    );
+
+    if (moveDistance > 5) return; // Was a drag, not a click
+
+    // Calculate click position in map coordinates
+    const rect = mapViewport.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Convert to map content coordinates
+    mapPinX = (clickX - mapPanX) / mapZoom;
+    mapPinY = (clickY - mapPanY) / mapZoom;
+
+    // Position and show the pin
+    mapPin.style.left = mapPinX + 'px';
+    mapPin.style.top = mapPinY + 'px';
+    mapPin.classList.remove('hidden');
+
+    // Update display
+    mapsPinEl.textContent = `${Math.round(mapPinX)}, ${Math.round(mapPinY)}`;
+    setMapsState('click');
+    addMapsLogEntry(`pin placed (${Math.round(mapPinX)}, ${Math.round(mapPinY)})`, 'mouse');
+
+    setTimeout(() => setMapsState('idle'), 200);
+});
+
+// Reset map zoom button
+resetMapZoomBtn.addEventListener('click', () => {
+    mapZoom = 1.0;
+    mapPanX = 0;
+    mapPanY = 0;
+    updateMapTransform();
+    addMapsLogEntry('zoom reset', 'zoom');
+});
+
+// Clear pin button
+clearPinBtn.addEventListener('click', () => {
+    mapPin.classList.add('hidden');
+    mapPinX = null;
+    mapPinY = null;
+    mapsPinEl.textContent = 'None';
+    addMapsLogEntry('pin cleared', 'mouse');
+});
+
+// Toggle maps event log
+toggleMapsLogBtn.addEventListener('click', () => {
+    mapsLogVisible = !mapsLogVisible;
+    if (mapsLogVisible) {
+        mapsEventLog.style.display = 'flex';
+        toggleMapsLogBtn.textContent = 'Hide Log';
+    } else {
+        mapsEventLog.style.display = 'none';
+        toggleMapsLogBtn.textContent = 'Show Log';
+    }
+});
+
+// Clear maps log button
+clearMapsLogBtn.addEventListener('click', () => {
+    mapsEventLogContent.innerHTML = '';
+});
+
+// Context Menu
+const contextMenu = document.getElementById('map-context-menu');
+const coordsText = contextMenu.querySelector('.coords-text');
+let contextMenuX = 0;
+let contextMenuY = 0;
+
+// Show context menu on right-click
+mapViewport.addEventListener('contextmenu', (e) => {
+    if (!isMapsModeActive()) return;
+
+    e.preventDefault();
+
+    // Calculate click position in map coordinates
+    const rect = mapViewport.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Convert to map content coordinates
+    contextMenuX = (clickX - mapPanX) / mapZoom;
+    contextMenuY = (clickY - mapPanY) / mapZoom;
+
+    // Update coordinates display
+    coordsText.textContent = `Coords: ${Math.round(contextMenuX)}, ${Math.round(contextMenuY)}`;
+
+    // Position context menu
+    contextMenu.style.left = e.clientX - rect.left + 'px';
+    contextMenu.style.top = e.clientY - rect.top + 'px';
+
+    // Make sure menu doesn't go off screen
+    const menuRect = contextMenu.getBoundingClientRect();
+    if (e.clientX + menuRect.width > window.innerWidth) {
+        contextMenu.style.left = (e.clientX - rect.left - menuRect.width) + 'px';
+    }
+    if (e.clientY + menuRect.height > window.innerHeight) {
+        contextMenu.style.top = (e.clientY - rect.top - menuRect.height) + 'px';
+    }
+
+    // Show the menu
+    contextMenu.classList.remove('hidden');
+
+    setMapsState('click');
+    addMapsLogEntry('right-click menu opened', 'mouse');
+});
+
+// Hide context menu when clicking elsewhere
+document.addEventListener('click', (e) => {
+    if (!contextMenu.contains(e.target)) {
+        contextMenu.classList.add('hidden');
+    }
+});
+
+// Hide context menu when scrolling/panning map
+mapViewport.addEventListener('mousedown', () => {
+    contextMenu.classList.add('hidden');
+});
+
+// Handle context menu item clicks
+contextMenu.addEventListener('click', (e) => {
+    const menuItem = e.target.closest('.context-menu-item');
+    if (!menuItem) return;
+
+    const action = menuItem.dataset.action;
+
+    switch (action) {
+        case 'search':
+            addMapsLogEntry(`search at (${Math.round(contextMenuX)}, ${Math.round(contextMenuY)})`, 'mouse');
+            break;
+        case 'directions':
+            addMapsLogEntry(`directions from (${Math.round(contextMenuX)}, ${Math.round(contextMenuY)})`, 'mouse');
+            break;
+        case 'add-pin':
+            // Place pin at context menu location
+            mapPinX = contextMenuX;
+            mapPinY = contextMenuY;
+            mapPin.style.left = mapPinX + 'px';
+            mapPin.style.top = mapPinY + 'px';
+            mapPin.classList.remove('hidden');
+            mapsPinEl.textContent = `${Math.round(mapPinX)}, ${Math.round(mapPinY)}`;
+            addMapsLogEntry(`pin placed via menu (${Math.round(mapPinX)}, ${Math.round(mapPinY)})`, 'mouse');
+            break;
+        case 'coordinates':
+            // Copy coordinates to clipboard (mock)
+            addMapsLogEntry(`coordinates copied: ${Math.round(contextMenuX)}, ${Math.round(contextMenuY)}`, 'mouse');
+            break;
+        case 'favorite':
+            addMapsLogEntry(`added to favorites (${Math.round(contextMenuX)}, ${Math.round(contextMenuY)})`, 'mouse');
+            break;
+        case 'share':
+            addMapsLogEntry(`share location (${Math.round(contextMenuX)}, ${Math.round(contextMenuY)})`, 'mouse');
+            break;
+        case 'print':
+            addMapsLogEntry('print map requested', 'mouse');
+            break;
+    }
+
+    // Hide menu after action
+    contextMenu.classList.add('hidden');
+});
+
+// Initialize map on load
+window.addEventListener('load', () => {
+    updateMapTransform();
+});
