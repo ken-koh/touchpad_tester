@@ -9,12 +9,12 @@
 <body>
     <!-- Tab Navigation -->
     <nav class="tab-nav">
-        <button class="tab-btn active" data-tab="debug">Debug Dashboard</button>
-        <button class="tab-btn" data-tab="browse">Browse Mode</button>
+        <button class="tab-btn" data-tab="debug">Debug Dashboard</button>
+        <button class="tab-btn active" data-tab="browse">Browse Mode</button>
     </nav>
 
     <!-- Debug Dashboard View -->
-    <div id="debug-view" class="view active">
+    <div id="debug-view" class="view">
         <div class="dashboard">
             <header>
                 <h1>Touchpad Testing Dashboard</h1>
@@ -128,7 +128,7 @@
     </div>
 
     <!-- Browse Mode View -->
-    <div id="browse-view" class="view">
+    <div id="browse-view" class="view active">
         <!-- Sticky Debug Bar -->
         <div class="debug-bar">
             <div class="state-indicator">
@@ -168,6 +168,16 @@
                     <span id="bar-swipe" class="bar-value">-</span>
                 </div>
             </div>
+            <button id="toggle-event-log" class="bar-toggle-btn">Hide Log</button>
+        </div>
+
+        <!-- Floating Event Log -->
+        <div class="floating-event-log">
+            <div class="floating-log-header">
+                <span>Event Log</span>
+                <button id="clear-browse-log" class="clear-btn">Clear</button>
+            </div>
+            <div id="browse-event-log-content" class="log-content"></div>
         </div>
 
         <!-- Mock Wikipedia Article -->

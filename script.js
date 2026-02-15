@@ -19,7 +19,9 @@ const eventTilt = document.getElementById('event-tilt');
 const touchCount = document.getElementById('touch-count');
 const isPrimary = document.getElementById('is-primary');
 const eventLogContent = document.getElementById('event-log-content');
+const browseEventLogContent = document.getElementById('browse-event-log-content');
 const clearLogBtn = document.getElementById('clear-log');
+const clearBrowseLogBtn = document.getElementById('clear-browse-log');
 
 const zoomLevel = document.getElementById('zoom-level');
 const dotLeft = document.getElementById('dot-left');
@@ -38,6 +40,8 @@ const barSwipeEl = document.getElementById('bar-swipe');
 const wikiArticle = document.querySelector('.wiki-article');
 const browseView = document.getElementById('browse-view');
 const resetArticleZoomBtn = document.getElementById('reset-article-zoom');
+const toggleEventLogBtn = document.getElementById('toggle-event-log');
+const floatingEventLog = document.querySelector('.floating-event-log');
 
 // Tab elements
 const tabBtns = document.querySelectorAll('.tab-btn');
@@ -100,11 +104,11 @@ document.addEventListener('wheel', (e) => {
     // Detect direction change
     if (currentDirX !== 0 && lastScrollDirX !== 0 && currentDirX !== lastScrollDirX) {
         const dirName = currentDirX > 0 ? 'right' : 'left';
-        addLogEntry(`scroll direction X → ${dirName}`, 'scroll');
+        addLogEntry(`scroll X → ${dirName}`, 'scroll-x');
     }
     if (currentDirY !== 0 && lastScrollDirY !== 0 && currentDirY !== lastScrollDirY) {
         const dirName = currentDirY > 0 ? 'down' : 'up';
-        addLogEntry(`scroll direction Y → ${dirName}`, 'scroll');
+        addLogEntry(`scroll Y → ${dirName}`, 'scroll-y');
     }
 
     // Update last direction (only if non-zero)
@@ -213,31 +217,31 @@ function updateZoomVisualization() {
 function updateArticleZoom(e, oldZoom, newZoom) {
     if (wikiArticle && e) {
         const rect = wikiArticle.getBoundingClientRect();
-        
+
         // Get cursor position relative to the article's current visual position
         const cursorX = e.clientX;
         const cursorY = e.clientY;
-        
+
         // Calculate the point in the article's untransformed coordinate system
         // that is currently under the cursor
         const pointX = (cursorX - rect.left) / oldZoom;
         const pointY = (cursorY - rect.top) / oldZoom;
-        
+
         // When we change the zoom, the point under the cursor would move.
         // Calculate how much it would move and compensate with translation.
         // The point's screen position after zoom = pointX * newZoom + translateX
         // We want this to equal cursorX - rect.left (before accounting for translation change)
         // So: translateX_new = cursorX - rect.left - pointX * newZoom
         // But we need to account for the current translation in rect.left
-        
+
         // Simpler approach: calculate the shift caused by zoom change and compensate
         const zoomRatio = newZoom / oldZoom;
-        
+
         // The point under cursor moves by (zoomRatio - 1) * its position relative to origin
         // We need to translate to counteract this
         articleTranslateX = articleTranslateX * zoomRatio - pointX * (newZoom - oldZoom);
         articleTranslateY = articleTranslateY * zoomRatio - pointY * (newZoom - oldZoom);
-        
+
         // Apply the transform
         wikiArticle.style.transformOrigin = '0 0';
         wikiArticle.style.transform = `translate(${articleTranslateX}px, ${articleTranslateY}px) scale(${newZoom})`;
@@ -303,6 +307,16 @@ function addLogEntry(eventName, category) {
     entry.className = `log-entry ${category}`;
     entry.innerHTML = `<span class="timestamp">${formatTimestamp()}</span><span class="event-name">${eventName}</span>`;
     eventLogContent.insertBefore(entry, eventLogContent.firstChild);
+
+    // Also add to browse mode log
+    if (browseEventLogContent) {
+        const browseEntry = entry.cloneNode(true);
+        browseEventLogContent.insertBefore(browseEntry, browseEventLogContent.firstChild);
+
+        while (browseEventLogContent.children.length > 50) {
+            browseEventLogContent.removeChild(browseEventLogContent.lastChild);
+        }
+    }
 
     while (eventLogContent.children.length > 50) {
         eventLogContent.removeChild(eventLogContent.lastChild);
@@ -430,6 +444,11 @@ clearLogBtn.addEventListener('click', () => {
     eventLogContent.innerHTML = '';
 });
 
+// Clear browse log button
+clearBrowseLogBtn.addEventListener('click', () => {
+    browseEventLogContent.innerHTML = '';
+});
+
 // ==================== //
 // Tab Navigation       //
 // ==================== //
@@ -531,6 +550,19 @@ resetArticleZoomBtn.addEventListener('click', () => {
         wikiArticle.style.transform = 'translate(0px, 0px) scale(1)';
     }
     barZoomEl.textContent = '100%';
+});
+
+// Toggle floating event log visibility
+let eventLogVisible = true;
+toggleEventLogBtn.addEventListener('click', () => {
+    eventLogVisible = !eventLogVisible;
+    if (eventLogVisible) {
+        floatingEventLog.style.display = 'flex';
+        toggleEventLogBtn.textContent = 'Hide Log';
+    } else {
+        floatingEventLog.style.display = 'none';
+        toggleEventLogBtn.textContent = 'Show Log';
+    }
 });
 
 // ==================== //
