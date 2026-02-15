@@ -35,6 +35,9 @@ const barGestureEl = document.getElementById('bar-gesture');
 const barFingersEl = document.getElementById('bar-fingers');
 const barPinchEl = document.getElementById('bar-pinch');
 const barSwipeEl = document.getElementById('bar-swipe');
+const wikiArticle = document.querySelector('.wiki-article');
+const browseView = document.getElementById('browse-view');
+const resetArticleZoomBtn = document.getElementById('reset-article-zoom');
 
 // Tab elements
 const tabBtns = document.querySelectorAll('.tab-btn');
@@ -44,9 +47,14 @@ const views = document.querySelectorAll('.view');
 let scrollTotalX = 0;
 let scrollTotalY = 0;
 let currentZoom = 1.0;
+let articleZoom = 1.0; // Separate zoom for the article content
+let articleTranslateX = 0; // Translation to keep zoom centered on cursor
+let articleTranslateY = 0;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5.0;
 const ZOOM_SENSITIVITY = 0.01;
+const ARTICLE_MIN_ZOOM = 0.25;
+const ARTICLE_MAX_ZOOM = 5.0;
 
 // Scroll/Zoom event detection state
 let isScrolling = false;
@@ -64,6 +72,16 @@ let lastZoomDir = 0;    // -1 = out, 0 = none, 1 = in
 document.addEventListener('wheel', (e) => {
     if (e.ctrlKey) {
         e.preventDefault();
+
+        // Apply zoom to article content when in browse mode
+        if (isBrowseModeActive()) {
+            const oldZoom = articleZoom;
+            const delta = -e.deltaY * ZOOM_SENSITIVITY;
+            const newZoom = Math.max(ARTICLE_MIN_ZOOM, Math.min(ARTICLE_MAX_ZOOM, articleZoom + delta));
+            articleZoom = newZoom;
+            updateArticleZoom(e, oldZoom, newZoom);
+        }
+
         handleZoom(e);
         return;
     }
@@ -189,6 +207,47 @@ function updateZoomVisualization() {
 
     dotLeft.style.left = (center - distance - dotWidth / 2) + 'px';
     dotRight.style.left = (center + distance - dotWidth / 2) + 'px';
+}
+
+// Update article zoom in browse mode
+function updateArticleZoom(e, oldZoom, newZoom) {
+    if (wikiArticle && e) {
+        const rect = wikiArticle.getBoundingClientRect();
+        
+        // Get cursor position relative to the article's current visual position
+        const cursorX = e.clientX;
+        const cursorY = e.clientY;
+        
+        // Calculate the point in the article's untransformed coordinate system
+        // that is currently under the cursor
+        const pointX = (cursorX - rect.left) / oldZoom;
+        const pointY = (cursorY - rect.top) / oldZoom;
+        
+        // When we change the zoom, the point under the cursor would move.
+        // Calculate how much it would move and compensate with translation.
+        // The point's screen position after zoom = pointX * newZoom + translateX
+        // We want this to equal cursorX - rect.left (before accounting for translation change)
+        // So: translateX_new = cursorX - rect.left - pointX * newZoom
+        // But we need to account for the current translation in rect.left
+        
+        // Simpler approach: calculate the shift caused by zoom change and compensate
+        const zoomRatio = newZoom / oldZoom;
+        
+        // The point under cursor moves by (zoomRatio - 1) * its position relative to origin
+        // We need to translate to counteract this
+        articleTranslateX = articleTranslateX * zoomRatio - pointX * (newZoom - oldZoom);
+        articleTranslateY = articleTranslateY * zoomRatio - pointY * (newZoom - oldZoom);
+        
+        // Apply the transform
+        wikiArticle.style.transformOrigin = '0 0';
+        wikiArticle.style.transform = `translate(${articleTranslateX}px, ${articleTranslateY}px) scale(${newZoom})`;
+        barZoomEl.textContent = `${Math.round(newZoom * 100)}%`;
+    }
+}
+
+// Check if browse mode is active
+function isBrowseModeActive() {
+    return browseView && browseView.classList.contains('active');
 }
 
 resetZoomBtn.addEventListener('click', () => {
@@ -422,23 +481,24 @@ function setCurrentState(state) {
 
 function updateBarStats() {
     barScrollEl.textContent = `${Math.round(scrollTotalX)}, ${Math.round(scrollTotalY)}`;
-    barZoomEl.textContent = `${Math.round(currentZoom * 100)}%`;
+    // Show articleZoom when in browse mode, otherwise show currentZoom
+    if (isBrowseModeActive()) {
+        barZoomEl.textContent = `${Math.round(articleZoom * 100)}%`;
+    } else {
+        barZoomEl.textContent = `${Math.round(currentZoom * 100)}%`;
+    }
     barClickEl.textContent = lastClickInfo;
 }
 
-// Hook into existing scroll handler to update browse mode
-const originalWheelHandler = document.onwheel;
+// Hook into existing scroll handler to update browse mode state
 document.addEventListener('wheel', (e) => {
     if (e.ctrlKey) {
         setCurrentState('zoom');
-        // Handle zoom in browse mode too
-        e.preventDefault();
-        handleZoom(e);
     } else {
         setCurrentState('scroll');
     }
     updateBarStats();
-}, { passive: false });
+}, { passive: true });
 
 // Hook into pointer move for move state
 document.addEventListener('pointermove', (e) => {
@@ -459,6 +519,18 @@ document.addEventListener('mousedown', (e) => {
 // Initialize bar stats
 window.addEventListener('load', () => {
     updateBarStats();
+});
+
+// Reset article zoom button
+resetArticleZoomBtn.addEventListener('click', () => {
+    articleZoom = 1.0;
+    articleTranslateX = 0;
+    articleTranslateY = 0;
+    if (wikiArticle) {
+        wikiArticle.style.transformOrigin = '0 0';
+        wikiArticle.style.transform = 'translate(0px, 0px) scale(1)';
+    }
+    barZoomEl.textContent = '100%';
 });
 
 // ==================== //
