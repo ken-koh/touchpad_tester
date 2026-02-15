@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Touchpad Testing Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="debug">Debug Dashboard</button>
+        <button class="tab-btn" data-tab="browse">Browse Mode</button>
+    </nav>
+
+    <!-- Debug Dashboard View -->
+    <div id="debug-view" class="view active">
+        <div class="dashboard">
+            <header>
+                <h1>Touchpad Testing Dashboard</h1>
+            </header>
+
+            <main class="panels-grid">
+                <!-- Left Column: Scroll + Zoom -->
+                <div class="left-column">
+                    <!-- Scroll Value Display -->
+                    <section class="panel scroll-panel">
+                        <h2>Scroll Values</h2>
+                        <div class="scroll-display">
+                            <div class="scroll-item">
+                                <span class="label">Delta X</span>
+                                <span id="delta-x" class="value">0</span>
+                            </div>
+                            <div class="scroll-item">
+                                <span class="label">Delta Y</span>
+                                <span id="delta-y" class="value">0</span>
+                            </div>
+                            <div class="scroll-item">
+                                <span class="label">Total X</span>
+                                <span id="total-x" class="value">0</span>
+                            </div>
+                            <div class="scroll-item">
+                                <span class="label">Total Y</span>
+                                <span id="total-y" class="value">0</span>
+                            </div>
+                        </div>
+                        <button id="reset-scroll" class="reset-btn">Reset</button>
+                    </section>
+
+                    <!-- Zoom Visualization -->
+                    <section class="panel zoom-panel">
+                        <h2>Zoom <span id="zoom-level" class="zoom-value">100%</span></h2>
+                        <div class="zoom-visualization">
+                            <div id="dot-left" class="zoom-dot"></div>
+                            <div id="dot-right" class="zoom-dot"></div>
+                        </div>
+                        <button id="reset-zoom" class="reset-btn">Reset</button>
+                    </section>
+                </div>
+
+                <!-- Center: Touchpad -->
+                <section class="panel touchpad-panel">
+                    <h2>Touchpad</h2>
+                    <div class="touchpad">
+                        <div class="touchpad-surface"></div>
+                        <div class="touchpad-buttons">
+                            <div id="left-button" class="touchpad-button left">L</div>
+                            <div id="right-button" class="touchpad-button right">R</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Right Column: Event Data -->
+                <section class="panel events-panel">
+                    <h2>Event Data</h2>
+                    <div class="event-grid">
+                        <div class="event-item">
+                            <span class="label">Type</span>
+                            <span id="event-type" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Button</span>
+                            <span id="event-button" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Buttons</span>
+                            <span id="event-buttons" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Pointer</span>
+                            <span id="pointer-type" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Position</span>
+                            <span id="event-position" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Movement</span>
+                            <span id="event-movement" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Pressure</span>
+                            <span id="event-pressure" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Tilt</span>
+                            <span id="event-tilt" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Touches</span>
+                            <span id="touch-count" class="value">-</span>
+                        </div>
+                        <div class="event-item">
+                            <span class="label">Primary</span>
+                            <span id="is-primary" class="value">-</span>
+                        </div>
+                    </div>
+                    <div class="event-log">
+                        <div class="log-header">
+                            <span>Event Log</span>
+                            <button id="clear-log" class="clear-btn">Clear</button>
+                        </div>
+                        <div id="event-log-content" class="log-content"></div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Browse Mode View -->
+    <div id="browse-view" class="view">
+        <!-- Sticky Debug Bar -->
+        <div class="debug-bar">
+            <div class="state-indicator">
+                <span class="state-label">State:</span>
+                <span id="current-state" class="state-value">idle</span>
+            </div>
+            <div class="bar-stats">
+                <div class="bar-stat">
+                    <span class="bar-label">Scroll:</span>
+                    <span id="bar-scroll" class="bar-value">0, 0</span>
+                </div>
+                <div class="bar-stat">
+                    <span class="bar-label">Zoom:</span>
+                    <span id="bar-zoom" class="bar-value">100%</span>
+                </div>
+                <div class="bar-stat">
+                    <span class="bar-label">Click:</span>
+                    <span id="bar-click" class="bar-value">-</span>
+                </div>
+            </div>
+            <div class="gesture-info">
+                <div class="bar-stat">
+                    <span class="bar-label">Gesture:</span>
+                    <span id="bar-gesture" class="bar-value gesture">-</span>
+                </div>
+                <div class="bar-stat">
+                    <span class="bar-label">Fingers:</span>
+                    <span id="bar-fingers" class="bar-value">0</span>
+                </div>
+                <div class="bar-stat">
+                    <span class="bar-label">Pinch:</span>
+                    <span id="bar-pinch" class="bar-value">-</span>
+                </div>
+                <div class="bar-stat">
+                    <span class="bar-label">Swipe:</span>
+                    <span id="bar-swipe" class="bar-value">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mock Wikipedia Article -->
+        <article class="wiki-article">
+            <div class="wiki-header">
+                <h1>Laptop Trackpad</h1>
+                <p class="wiki-subtitle">From Wikipedia, the free encyclopedia</p>
+            </div>
+
+            <div class="wiki-content">
+                <div class="wiki-infobox">
+                    <div class="infobox-title">Trackpad</div>
+                    <div class="infobox-image">
+                        <div class="placeholder-image">
+                            <span>Trackpad Illustration</span>
+                        </div>
+                    </div>
+                    <table class="infobox-table">
+                        <tr><th>Type</th><td>Pointing device</td></tr>
+                        <tr><th>Inventor</th><td>George E. Gerpheide</td></tr>
+                        <tr><th>Inception</th><td>1988</td></tr>
+                        <tr><th>Also known as</th><td>Touchpad, glide pad, glide point</td></tr>
+                    </table>
+                </div>
+
+                <p class="wiki-intro">
+                    A <strong>trackpad</strong> (also called a <strong>touchpad</strong>) is a pointing device featuring a tactile sensor,
+                    a specialized surface that can translate the motion and position of a user's fingers to a relative position on
+                    the operating system that is made output to the screen. Trackpads are a common feature of laptop computers and
+                    are also used as a substitute for a mouse where desk space is limited.
+                </p>
+
+                <div class="wiki-toc">
+                    <h2>Contents</h2>
+                    <ol>
+                        <li><a href="#history">History</a></li>
+                        <li><a href="#technology">Technology</a></li>
+                        <li><a href="#gestures">Multi-touch gestures</a></li>
+                        <li><a href="#manufacturers">Major manufacturers</a></li>
+                    </ol>
+                </div>
+
+                <section id="history">
+                    <h2>History</h2>
+                    <p>
+                        The first touchpad was invented by George E. Gerpheide in 1988. The technology was later licensed to
+                        Apple Computer, who introduced it in the PowerBook series in 1994, making it the first mainstream laptop
+                        to include a touchpad as standard equipment.
+                    </p>
+                    <p>
+                        Early touchpads were relatively simple, supporting only basic cursor movement and tap-to-click functionality.
+                        The technology has since evolved significantly, with modern trackpads supporting multi-touch gestures,
+                        pressure sensitivity, and haptic feedback.
+                    </p>
+                    <div class="wiki-image-block">
+                        <div class="placeholder-image large">
+                            <span>Early PowerBook Trackpad (1994)</span>
+                        </div>
+                        <p class="image-caption">The Apple PowerBook 500 series was among the first laptops to feature a built-in trackpad.</p>
+                    </div>
+                </section>
+
+                <section id="technology">
+                    <h2>Technology</h2>
+                    <p>
+                        Modern trackpads typically use one of two technologies: <strong>capacitive sensing</strong> or
+                        <strong>resistive sensing</strong>. Capacitive touchpads, which are more common in contemporary devices,
+                        detect the electrical properties of the human finger to determine touch position and movement.
+                    </p>
+
+                    <h3>Capacitive Sensing</h3>
+                    <p>
+                        Capacitive trackpads work by measuring the capacitance at various points across the pad surface. When a
+                        finger approaches or touches the surface, it changes the local electrostatic field, which is detected by
+                        the sensor array. This allows for precise tracking of finger position and movement.
+                    </p>
+
+                    <h3>Force Touch and Haptic Feedback</h3>
+                    <p>
+                        Recent advancements include Force Touch technology, which can detect different levels of pressure applied
+                        to the trackpad surface. Combined with haptic feedback motors (taptic engines), these trackpads can simulate
+                        the feeling of a physical click even though the surface doesn't actually move.
+                    </p>
+                    <div class="wiki-image-block">
+                        <div class="placeholder-image large">
+                            <span>Capacitive Sensor Array Diagram</span>
+                        </div>
+                        <p class="image-caption">Diagram showing the capacitive sensor grid underneath a typical trackpad surface.</p>
+                    </div>
+                </section>
+
+                <section id="gestures">
+                    <h2>Multi-touch Gestures</h2>
+                    <p>
+                        Modern trackpads support a variety of multi-touch gestures that allow users to perform complex actions
+                        with simple finger movements. Common gestures include:
+                    </p>
+
+                    <table class="wiki-table">
+                        <thead>
+                            <tr>
+                                <th>Gesture</th>
+                                <th>Fingers</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Tap</td>
+                                <td>1</td>
+                                <td>Left click</td>
+                            </tr>
+                            <tr>
+                                <td>Two-finger tap</td>
+                                <td>2</td>
+                                <td>Right click (context menu)</td>
+                            </tr>
+                            <tr>
+                                <td>Two-finger scroll</td>
+                                <td>2</td>
+                                <td>Scroll vertically or horizontally</td>
+                            </tr>
+                            <tr>
+                                <td>Pinch</td>
+                                <td>2</td>
+                                <td>Zoom in or out</td>
+                            </tr>
+                            <tr>
+                                <td>Three-finger swipe</td>
+                                <td>3</td>
+                                <td>Switch between applications or desktops</td>
+                            </tr>
+                            <tr>
+                                <td>Four-finger swipe</td>
+                                <td>4</td>
+                                <td>Show desktop or mission control</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>
+                        The implementation and availability of these gestures varies between operating systems and trackpad
+                        manufacturers. Windows Precision Touchpad drivers and Apple's trackpad drivers offer some of the most
+                        comprehensive gesture support.
+                    </p>
+                </section>
+
+                <section id="manufacturers">
+                    <h2>Major Manufacturers</h2>
+                    <p>
+                        Several companies specialize in the development and manufacturing of trackpad technology:
+                    </p>
+                    <ul class="wiki-list">
+                        <li><strong>Synaptics</strong> - One of the largest touchpad manufacturers, supplying components to many laptop brands</li>
+                        <li><strong>ELAN Microelectronics</strong> - Major supplier of touchpad solutions for Windows laptops</li>
+                        <li><strong>Apple</strong> - Designs and manufactures their own trackpads with proprietary Force Touch technology</li>
+                        <li><strong>Alps Alpine</strong> - Supplies touchpad components to various laptop manufacturers</li>
+                        <li><strong>Cirque Corporation</strong> - Pioneer in touchpad technology, now a subsidiary of Alps Alpine</li>
+                    </ul>
+
+                    <div class="wiki-image-block">
+                        <div class="placeholder-image large">
+                            <span>Modern Glass Trackpad</span>
+                        </div>
+                        <p class="image-caption">A modern glass-surface trackpad with edge-to-edge design, common in premium laptops.</p>
+                    </div>
+                </section>
+
+                <section class="wiki-seealso">
+                    <h2>See Also</h2>
+                    <ul>
+                        <li><a href="#">Computer mouse</a></li>
+                        <li><a href="#">Pointing stick</a></li>
+                        <li><a href="#">Graphics tablet</a></li>
+                        <li><a href="#">Touchscreen</a></li>
+                    </ul>
+                </section>
+
+                <section class="wiki-references">
+                    <h2>References</h2>
+                    <ol class="references-list">
+                        <li>Gerpheide, George E. (1988). "Touch-sensitive input device". US Patent 5,305,017.</li>
+                        <li>Apple Computer (1994). "PowerBook 500 Series Technical Documentation".</li>
+                        <li>Synaptics Inc. (2020). "Touchpad Technology White Paper".</li>
+                        <li>Microsoft (2023). "Windows Precision Touchpad Implementation Guide".</li>
+                    </ol>
+                </section>
+            </div>
+        </article>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
