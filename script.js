@@ -382,9 +382,7 @@ document.addEventListener('mouseup', (e) => {
     }
 });
 
-document.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-});
+// NOTE: Global contextmenu prevention removed to allow native browser right-click menu in Browse Mode
 
 // Zoom handling
 function handleZoom(e) {
@@ -786,90 +784,21 @@ toggleEventLogBtn.addEventListener('click', () => {
     }
 });
 
-// Browse Mode Context Menu
+// Browse Mode Context Menu - DISABLED to show native browser menu
 const browseContextMenu = document.getElementById('browse-context-menu');
 
-// Show context menu on right-click in browse mode
+// Hide the mock context menu element
+if (browseContextMenu) {
+    browseContextMenu.style.display = 'none';
+}
+
+// Log right-click but allow native browser context menu to appear
 browseView.addEventListener('contextmenu', (e) => {
     if (!isBrowseModeActive()) return;
 
-    e.preventDefault();
-
-    // Position context menu
-    const viewRect = browseView.getBoundingClientRect();
-    let posX = e.clientX - viewRect.left;
-    let posY = e.clientY - viewRect.top;
-
-    browseContextMenu.style.left = posX + 'px';
-    browseContextMenu.style.top = posY + 'px';
-
-    // Show the menu first to get dimensions
-    browseContextMenu.classList.remove('hidden');
-
-    // Adjust if menu goes off screen
-    const menuRect = browseContextMenu.getBoundingClientRect();
-    if (e.clientX + menuRect.width > window.innerWidth) {
-        browseContextMenu.style.left = (posX - menuRect.width) + 'px';
-    }
-    if (e.clientY + menuRect.height > window.innerHeight) {
-        browseContextMenu.style.top = (posY - menuRect.height) + 'px';
-    }
-
+    // Do NOT call e.preventDefault() - allow native browser menu
     setCurrentState('click');
-    addLogEntry('right-click menu opened', 'mouse');
-});
-
-// Hide browse context menu when clicking elsewhere
-document.addEventListener('click', (e) => {
-    if (!browseContextMenu.contains(e.target)) {
-        browseContextMenu.classList.add('hidden');
-    }
-});
-
-// Hide browse context menu when scrolling
-browseView.addEventListener('scroll', () => {
-    browseContextMenu.classList.add('hidden');
-});
-
-// Handle browse context menu item clicks
-browseContextMenu.addEventListener('click', (e) => {
-    const menuItem = e.target.closest('.context-menu-item');
-    if (!menuItem) return;
-
-    const action = menuItem.dataset.action;
-
-    switch (action) {
-        case 'back':
-            addLogEntry('navigate back', 'mouse');
-            break;
-        case 'forward':
-            addLogEntry('navigate forward', 'mouse');
-            break;
-        case 'reload':
-            addLogEntry('reload page', 'mouse');
-            break;
-        case 'save':
-            addLogEntry('save page as...', 'mouse');
-            break;
-        case 'print':
-            addLogEntry('print page', 'mouse');
-            break;
-        case 'copy':
-            addLogEntry('copy', 'mouse');
-            break;
-        case 'select-all':
-            addLogEntry('select all', 'mouse');
-            break;
-        case 'view-source':
-            addLogEntry('view page source', 'mouse');
-            break;
-        case 'inspect':
-            addLogEntry('inspect element', 'mouse');
-            break;
-    }
-
-    // Hide menu after action
-    browseContextMenu.classList.add('hidden');
+    addBrowseLogEntry('right-click (native menu)', 'mouse');
 });
 
 // ==================== //
