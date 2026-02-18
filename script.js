@@ -72,8 +72,229 @@ let lastScrollDirX = 0; // -1 = left, 0 = none, 1 = right
 let lastScrollDirY = 0; // -1 = up, 0 = none, 1 = down
 let lastZoomDir = 0;    // -1 = out, 0 = none, 1 = in
 
-// Scroll handling
+// Scroll position tracking for alternative scroll detection (VR headsets, etc.)
+let lastScrollTop = 0;
+let lastScrollLeft = 0;
+let scrollPollInterval = null;
+let lastScrollTime = 0;
+
+// Alternative scroll detection using scroll event (catches VR headset scrolling)
+function initAlternativeScrollDetection() {
+    // Track scroll position changes on the document
+    window.addEventListener('scroll', handleNativeScroll, { passive: true });
+
+    // Also listen on scrollable containers
+    document.querySelectorAll('.wiki-content, .wiki-article, [style*="overflow"]').forEach(el => {
+        el.addEventListener('scroll', (e) => handleElementScroll(e, el), { passive: true });
+    });
+
+    // Store initial scroll positions
+    lastScrollTop = window.scrollY || document.documentElement.scrollTop;
+    lastScrollLeft = window.scrollX || document.documentElement.scrollLeft;
+}
+
+function handleNativeScroll(e) {
+    const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
+    const currentScrollLeft = window.scrollX || document.documentElement.scrollLeft;
+
+    const deltaY = currentScrollTop - lastScrollTop;
+    const deltaX = currentScrollLeft - lastScrollLeft;
+
+    // Only process if there's actual movement
+    if (deltaX !== 0 || deltaY !== 0) {
+        processAlternativeScroll(deltaX, deltaY, 'native-scroll');
+    }
+
+    lastScrollTop = currentScrollTop;
+    lastScrollLeft = currentScrollLeft;
+}
+
+function handleElementScroll(e, element) {
+    const scrollTop = element.scrollTop;
+    const scrollLeft = element.scrollLeft;
+
+    // Use data attributes to track last known position per element
+    const lastTop = parseFloat(element.dataset.lastScrollTop) || 0;
+    const lastLeft = parseFloat(element.dataset.lastScrollLeft) || 0;
+
+    const deltaY = scrollTop - lastTop;
+    const deltaX = scrollLeft - lastLeft;
+
+    if (deltaX !== 0 || deltaY !== 0) {
+        processAlternativeScroll(deltaX, deltaY, 'element-scroll');
+    }
+
+    element.dataset.lastScrollTop = scrollTop;
+    element.dataset.lastScrollLeft = scrollLeft;
+}
+
+function processAlternativeScroll(deltaX, deltaY, source) {
+    const now = Date.now();
+
+    // Debounce to avoid duplicate detection with wheel events
+    // Only process if no wheel event happened recently
+    if (now - lastScrollTime < 50) {
+        return;
+    }
+
+    const currentDirX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
+    const currentDirY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
+
+    // Detect scroll start
+    if (!isScrolling) {
+        isScrolling = true;
+        lastScrollDirX = currentDirX;
+        lastScrollDirY = currentDirY;
+
+        if (isBrowseModeActive()) {
+            updateBrowseState('scrolling');
+            addBrowseLogEntry(`scroll start (${source}) dir: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
+        }
+    } else {
+        // Check for direction change
+        if ((currentDirX !== 0 && currentDirX !== lastScrollDirX) ||
+            (currentDirY !== 0 && currentDirY !== lastScrollDirY)) {
+            if (isBrowseModeActive()) {
+                addBrowseLogEntry(`scroll direction change (${source}) to: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
+            }
+        }
+        if (currentDirX !== 0) lastScrollDirX = currentDirX;
+        if (currentDirY !== 0) lastScrollDirY = currentDirY;
+    }
+
+    // Update scroll totals
+    scrollTotalX += Math.abs(deltaX);
+    scrollTotalY += Math.abs(deltaY);
+
+    // Update display
+    deltaXEl = document.getElementById('delta-x');
+    deltaYEl = document.getElementById('delta-y');
+    if (deltaXEl) deltaXEl.textContent = deltaX.toFixed(1);
+    if (deltaYEl) deltaYEl.textContent = deltaY.toFixed(1);
+
+    totalXEl = document.getElementById('total-x');
+    totalYEl = document.getElementById('total-y');
+    if (totalXEl) totalXEl.textContent = scrollTotalX.toFixed(0);
+    if (totalYEl) totalYEl.textContent = scrollTotalY.toFixed(0);
+
+    // Reset scroll end detection
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+        if (isScrolling) {
+            isScrolling = false;
+            if (isBrowseModeActive()) {
+                updateBrowseState('idle');
+                addBrowseLogEntry(`scroll end (${source})`, 'scroll');
+            }
+        }
+    }, EVENT_END_DELAY);
+}
+
+// Touch-based scroll detection (for VR controllers that emulate touch)
+let touchStartY = 0;
+let touchStartX = 0;
+let isTouchScrolling = false;
+
+function initTouchScrollDetection() {
+    document.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            isTouchScrolling = false;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1) {
+            const deltaX = touchStartX - e.touches[0].clientX;
+            const deltaY = touchStartY - e.touches[0].clientY;
+
+            // Only consider it scrolling if moved more than a small threshold
+            if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+                if (!isTouchScrolling) {
+                    isTouchScrolling = true;
+                }
+                processAlternativeScroll(deltaX, deltaY, 'touch');
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+        if (isTouchScrolling) {
+            isTouchScrolling = false;
+        }
+    }, { passive: true });
+}
+
+// Pointer-based scroll detection (for VR controllers using pointer events)
+let pointerScrollStartY = 0;
+let pointerScrollStartX = 0;
+let isPointerScrolling = false;
+let scrollPointerIds = new Set();
+
+function initPointerScrollDetection() {
+    document.addEventListener('pointerdown', (e) => {
+        // Track pointer for potential scroll gesture
+        if (e.pointerType === 'touch' || e.pointerType === 'pen' || e.pointerType === 'xr-standard') {
+            scrollPointerIds.add(e.pointerId);
+            pointerScrollStartX = e.clientX;
+            pointerScrollStartY = e.clientY;
+        }
+    }, { passive: true });
+
+    document.addEventListener('pointermove', (e) => {
+        if (scrollPointerIds.has(e.pointerId) && (e.pointerType === 'touch' || e.pointerType === 'pen' || e.pointerType === 'xr-standard')) {
+            const deltaX = pointerScrollStartX - e.clientX;
+            const deltaY = pointerScrollStartY - e.clientY;
+
+            if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+                if (!isPointerScrolling) {
+                    isPointerScrolling = true;
+                }
+                processAlternativeScroll(deltaX, deltaY, `pointer-${e.pointerType}`);
+                pointerScrollStartX = e.clientX;
+                pointerScrollStartY = e.clientY;
+            }
+        }
+    }, { passive: true });
+
+    document.addEventListener('pointerup', (e) => {
+        scrollPointerIds.delete(e.pointerId);
+        if (scrollPointerIds.size === 0) {
+            isPointerScrolling = false;
+        }
+    }, { passive: true });
+
+    document.addEventListener('pointercancel', (e) => {
+        scrollPointerIds.delete(e.pointerId);
+        if (scrollPointerIds.size === 0) {
+            isPointerScrolling = false;
+        }
+    }, { passive: true });
+}
+
+// Initialize all alternative scroll detection methods
+document.addEventListener('DOMContentLoaded', () => {
+    initAlternativeScrollDetection();
+    initTouchScrollDetection();
+    initPointerScrollDetection();
+});
+
+// Helper to get direction description
+function getDirDescription(dirX, dirY) {
+    const parts = [];
+    if (dirY < 0) parts.push('up');
+    if (dirY > 0) parts.push('down');
+    if (dirX < 0) parts.push('left');
+    if (dirX > 0) parts.push('right');
+    return parts.length > 0 ? parts.join('-') : 'none';
+}
+
+// Scroll handling (wheel event - primary method for touchpads/mice)
 document.addEventListener('wheel', (e) => {
+    lastScrollTime = Date.now(); // Mark that wheel event occurred
     if (e.ctrlKey) {
         e.preventDefault();
 
