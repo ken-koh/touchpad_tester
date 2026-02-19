@@ -12,6 +12,8 @@
         <button class="tab-btn" data-tab="debug">Debug Dashboard</button>
         <button class="tab-btn active" data-tab="browse">Browse Mode</button>
         <button class="tab-btn" data-tab="maps">Maps Mode</button>
+        <button class="tab-btn" data-tab="graph">Graph View</button>
+        <button class="tab-btn" data-tab="shapes">Shape Tests</button>
     </nav>
 
     <!-- Debug Dashboard View -->
@@ -608,6 +610,109 @@
                 <span>🖱️ Drag to pan</span>
                 <span>🔍 Pinch/Ctrl+Scroll to zoom</span>
                 <span>📍 Click to place pin</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graph View -->
+    <div id="graph-view" class="view">
+        <!-- Header Bar -->
+        <div class="graph-header">
+            <h2>Motion Analysis</h2>
+            <div class="graph-controls">
+                <button id="clear-graphs" class="graph-btn">Clear Graphs</button>
+                <button id="export-data" class="graph-btn">Export Data</button>
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <!-- Current Motion Stats -->
+            <div class="graph-stats-panel">
+                <h3>Current Motion</h3>
+                <div class="motion-type-indicator">
+                    <span class="motion-label">Motion Type:</span>
+                    <span id="graph-motion-type" class="motion-value">None</span>
+                </div>
+                <div class="motion-stats-grid">
+                    <div class="motion-stat">
+                        <span class="stat-label">Move X</span>
+                        <span id="graph-move-x" class="stat-value">0</span>
+                    </div>
+                    <div class="motion-stat">
+                        <span class="stat-label">Move Y</span>
+                        <span id="graph-move-y" class="stat-value">0</span>
+                    </div>
+                    <div class="motion-stat">
+                        <span class="stat-label">Scroll X</span>
+                        <span id="graph-scroll-x" class="stat-value">0</span>
+                    </div>
+                    <div class="motion-stat">
+                        <span class="stat-label">Scroll Y</span>
+                        <span id="graph-scroll-y" class="stat-value">0</span>
+                    </div>
+                    <div class="motion-stat">
+                        <span class="stat-label">Zoom</span>
+                        <span id="graph-zoom-value" class="stat-value">1.00</span>
+                    </div>
+                    <div class="motion-stat">
+                        <span class="stat-label">Duration</span>
+                        <span id="graph-duration" class="stat-value">0ms</span>
+                    </div>
+                </div>
+                <div class="motion-status">
+                    <span class="status-label">Status:</span>
+                    <span id="graph-motion-status" class="status-value idle">Idle</span>
+                </div>
+            </div>
+
+            <!-- Scroll Y Graph -->
+            <div class="graph-panel">
+                <div class="graph-title">
+                    <h3>Scroll Y (Vertical)</h3>
+                    <span class="graph-subtitle">Includes inertia tracking</span>
+                </div>
+                <div class="graph-canvas-container">
+                    <canvas id="scroll-y-graph-canvas"></canvas>
+                </div>
+                <div class="graph-legend">
+                    <span class="legend-item scroll-y-legend">● Delta Y</span>
+                </div>
+            </div>
+
+            <!-- Scroll X Graph -->
+            <div class="graph-panel">
+                <div class="graph-title">
+                    <h3>Scroll X (Horizontal)</h3>
+                    <span class="graph-subtitle">Includes inertia tracking</span>
+                </div>
+                <div class="graph-canvas-container">
+                    <canvas id="scroll-x-graph-canvas"></canvas>
+                </div>
+                <div class="graph-legend">
+                    <span class="legend-item scroll-x-legend">● Delta X</span>
+                </div>
+            </div>
+
+            <!-- Zoom Graph -->
+            <div class="graph-panel">
+                <div class="graph-title">
+                    <h3>Zoom Delta Over Time</h3>
+                    <span class="graph-subtitle">Pinch gesture tracking</span>
+                </div>
+                <div class="graph-canvas-container">
+                    <canvas id="zoom-graph-canvas"></canvas>
+                </div>
+                <div class="graph-legend">
+                    <span class="legend-item zoom-legend">● Zoom Level</span>
+                </div>
+            </div>
+
+            <!-- Motion History -->
+            <div class="graph-history-panel">
+                <h3>Motion History</h3>
+                <div id="motion-history-list" class="motion-history-list">
+                    <div class="history-placeholder">No motions recorded yet</div>
+                </div>
             </div>
         </div>
     </div>

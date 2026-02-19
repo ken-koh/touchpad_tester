@@ -1337,3 +1337,829 @@ contextMenu.addEventListener('click', (e) => {
 window.addEventListener('load', () => {
     updateMapTransform();
 });
+
+// ==================== //
+// Graph View           //
+// ==================== //
+
+const graphView = document.getElementById('graph-view');
+const scrollYGraphCanvas = document.getElementById('scroll-y-graph-canvas');
+const scrollXGraphCanvas = document.getElementById('scroll-x-graph-canvas');
+const zoomGraphCanvas = document.getElementById('zoom-graph-canvas');
+const scrollYGraphCtx = scrollYGraphCanvas ? scrollYGraphCanvas.getContext('2d') : null;
+const scrollXGraphCtx = scrollXGraphCanvas ? scrollXGraphCanvas.getContext('2d') : null;
+const zoomGraphCtx = zoomGraphCanvas ? zoomGraphCanvas.getContext('2d') : null;
+
+// Graph View DOM elements
+const graphMotionType = document.getElementById('graph-motion-type');
+const graphMoveX = document.getElementById('graph-move-x');
+const graphMoveY = document.getElementById('graph-move-y');
+const graphScrollX = document.getElementById('graph-scroll-x');
+const graphScrollY = document.getElementById('graph-scroll-y');
+const graphZoomValue = document.getElementById('graph-zoom-value');
+const graphDuration = document.getElementById('graph-duration');
+const graphMotionStatus = document.getElementById('graph-motion-status');
+const motionHistoryList = document.getElementById('motion-history-list');
+const clearGraphsBtn = document.getElementById('clear-graphs');
+const exportDataBtn = document.getElementById('export-data');
+
+// Graph View State
+let graphModeActive = false;
+let currentMotion = {
+    type: 'none',
+    startTime: 0,
+    moveX: 0,
+    moveY: 0,
+    scrollX: 0,
+    scrollY: 0,
+    zoomDelta: 0,
+    zoomLevel: 1.0
+};
+
+let isMotionActive = false;
+let motionEndTimeout = null;
+const MOTION_END_DELAY = 200; // ms to wait before considering motion ended
+
+// Graph data storage
+let scrollGraphData = [];
+let zoomGraphData = [];
+const MAX_GRAPH_POINTS = 500; // Max data points to store
+let graphStartTime = 0;
+
+// Motion history
+let motionHistory = [];
+const MAX_HISTORY_ITEMS = 20;
+
+function isGraphModeActive() {
+    return graphView && graphView.classList.contains('active');
+}
+
+// Initialize graph canvas sizes
+function initGraphCanvases() {
+    if (scrollYGraphCanvas) {
+        const container = scrollYGraphCanvas.parentElement;
+        scrollYGraphCanvas.width = container.clientWidth;
+        scrollYGraphCanvas.height = container.clientHeight;
+    }
+    if (scrollXGraphCanvas) {
+        const container = scrollXGraphCanvas.parentElement;
+        scrollXGraphCanvas.width = container.clientWidth;
+        scrollXGraphCanvas.height = container.clientHeight;
+    }
+    if (zoomGraphCanvas) {
+        const container = zoomGraphCanvas.parentElement;
+        zoomGraphCanvas.width = container.clientWidth;
+        zoomGraphCanvas.height = container.clientHeight;
+    }
+}
+
+// Resize observer for canvases
+const graphResizeObserver = new ResizeObserver(() => {
+    if (isGraphModeActive()) {
+        initGraphCanvases();
+        drawScrollYGraph();
+        drawScrollXGraph();
+        drawZoomGraph();
+    }
+});
+
+if (scrollYGraphCanvas && scrollYGraphCanvas.parentElement) {
+    graphResizeObserver.observe(scrollYGraphCanvas.parentElement);
+}
+if (scrollXGraphCanvas && scrollXGraphCanvas.parentElement) {
+    graphResizeObserver.observe(scrollXGraphCanvas.parentElement);
+}
+if (zoomGraphCanvas && zoomGraphCanvas.parentElement) {
+    graphResizeObserver.observe(zoomGraphCanvas.parentElement);
+}
+
+// Start a new motion
+function startMotion(type) {
+    // If starting a new motion of a different type, end the current one first
+    if (isMotionActive && currentMotion.type !== type) {
+        endMotion();
+    }
+
+    // If not already active, start fresh
+    if (!isMotionActive) {
+        isMotionActive = true;
+        currentMotion = {
+            type: type,
+            startTime: Date.now(),
+            moveX: 0,
+            moveY: 0,
+            scrollX: 0,
+            scrollY: 0,
+            zoomDelta: 0,
+            zoomLevel: 1.0  // Always reset zoom to 1.0 for new motion
+        };
+
+        // Clear graphs for new motion
+        scrollGraphData = [];
+        zoomGraphData = [];
+        graphStartTime = Date.now();
+
+        // Clear the canvases completely for new motion
+        clearGraphCanvases();
+
+        updateMotionStatus('active');
+        updateMotionTypeDisplay(type);
+    }
+
+    // Reset end timeout
+    clearTimeout(motionEndTimeout);
+}
+
+// Clear graph canvases completely (no ghost effect)
+function clearGraphCanvases() {
+    if (scrollYGraphCtx && scrollYGraphCanvas) {
+        scrollYGraphCtx.clearRect(0, 0, scrollYGraphCanvas.width, scrollYGraphCanvas.height);
+    }
+    if (scrollXGraphCtx && scrollXGraphCanvas) {
+        scrollXGraphCtx.clearRect(0, 0, scrollXGraphCanvas.width, scrollXGraphCanvas.height);
+    }
+    if (zoomGraphCtx && zoomGraphCanvas) {
+        zoomGraphCtx.clearRect(0, 0, zoomGraphCanvas.width, zoomGraphCanvas.height);
+    }
+    drawScrollYGraph();
+    drawScrollXGraph();
+    drawZoomGraph();
+}
+
+// End the current motion
+function endMotion() {
+    if (!isMotionActive) return;
+
+    isMotionActive = false;
+    const duration = Date.now() - currentMotion.startTime;
+
+    // Add to history
+    addMotionToHistory(currentMotion, duration);
+
+    updateMotionStatus('idle');
+}
+
+// Update motion with new data
+function updateMotion(type, data) {
+    if (!isGraphModeActive()) return;
+
+    startMotion(type);
+
+    const now = Date.now();
+    const timeSinceStart = now - graphStartTime;
+
+    if (type === 'move') {
+        currentMotion.moveX += data.deltaX || 0;
+        currentMotion.moveY += data.deltaY || 0;
+    } else if (type === 'scroll') {
+        currentMotion.scrollX += data.deltaX || 0;
+        currentMotion.scrollY += data.deltaY || 0;
+
+        // Add to scroll graph data
+        scrollGraphData.push({
+            time: timeSinceStart,
+            deltaX: data.deltaX || 0,
+            deltaY: data.deltaY || 0,
+            totalX: currentMotion.scrollX,
+            totalY: currentMotion.scrollY
+        });
+
+        if (scrollGraphData.length > MAX_GRAPH_POINTS) {
+            scrollGraphData.shift();
+        }
+
+        drawScrollYGraph();
+        drawScrollXGraph();
+    } else if (type === 'zoom') {
+        currentMotion.zoomDelta += data.delta || 0;
+        currentMotion.zoomLevel = data.level || 1.0;
+
+        // Add to zoom graph data
+        zoomGraphData.push({
+            time: timeSinceStart,
+            delta: data.delta || 0,
+            level: currentMotion.zoomLevel
+        });
+
+        if (zoomGraphData.length > MAX_GRAPH_POINTS) {
+            zoomGraphData.shift();
+        }
+
+        drawZoomGraph();
+    }
+
+    updateMotionStatsDisplay();
+
+    // Set timeout for motion end
+    clearTimeout(motionEndTimeout);
+    motionEndTimeout = setTimeout(() => {
+        // Check if we're in inertia (small continuing movements)
+        updateMotionStatus('inertia');
+
+        // Another timeout for actual end
+        motionEndTimeout = setTimeout(() => {
+            endMotion();
+        }, MOTION_END_DELAY);
+    }, MOTION_END_DELAY);
+}
+
+// Update motion type display
+function updateMotionTypeDisplay(type) {
+    if (!graphMotionType) return;
+
+    graphMotionType.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+    graphMotionType.className = 'motion-value ' + type;
+}
+
+// Update motion status display
+function updateMotionStatus(status) {
+    if (!graphMotionStatus) return;
+
+    graphMotionStatus.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+    graphMotionStatus.className = 'status-value ' + status;
+}
+
+// Update motion stats display
+function updateMotionStatsDisplay() {
+    if (graphMoveX) graphMoveX.textContent = Math.round(currentMotion.moveX);
+    if (graphMoveY) graphMoveY.textContent = Math.round(currentMotion.moveY);
+    if (graphScrollX) graphScrollX.textContent = Math.round(currentMotion.scrollX);
+    if (graphScrollY) graphScrollY.textContent = Math.round(currentMotion.scrollY);
+    if (graphZoomValue) graphZoomValue.textContent = currentMotion.zoomLevel.toFixed(2);
+    if (graphDuration) {
+        const duration = isMotionActive ? Date.now() - currentMotion.startTime : 0;
+        graphDuration.textContent = duration + 'ms';
+    }
+}
+
+// Draw scroll Y graph (vertical scroll)
+function drawScrollYGraph() {
+    if (!scrollYGraphCtx || !scrollYGraphCanvas) return;
+
+    const width = scrollYGraphCanvas.width;
+    const height = scrollYGraphCanvas.height;
+    const ctx = scrollYGraphCtx;
+    const leftMargin = 45; // Space for Y-axis labels
+
+    // Clear canvas completely (prevents ghost effect)
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, width, height);
+
+    if (scrollGraphData.length < 2) {
+        // Draw placeholder text
+        ctx.fillStyle = '#666';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Scroll to see data', width / 2, height / 2);
+        return;
+    }
+
+    // Find data range
+    const maxTime = scrollGraphData[scrollGraphData.length - 1].time;
+    const minTime = scrollGraphData[0].time;
+    const timeRange = maxTime - minTime || 1;
+
+    let maxDelta = 1;
+    scrollGraphData.forEach(d => {
+        maxDelta = Math.max(maxDelta, Math.abs(d.deltaY));
+    });
+
+    // Scale factor
+    const graphWidth = width - leftMargin;
+    const xScale = graphWidth / timeRange;
+    const yScale = (height / 2 - 20) / maxDelta;
+
+    // Draw Y-axis
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, 10);
+    ctx.lineTo(leftMargin, height - 20);
+    ctx.stroke();
+
+    // Draw Y-axis labels and grid lines
+    ctx.fillStyle = '#888';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'right';
+
+    // Center line (0)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+    ctx.fillText('0', leftMargin - 5, height / 2 + 3);
+
+    // Positive max
+    const topY = height / 2 - (height / 2 - 20);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, 20);
+    ctx.lineTo(width, 20);
+    ctx.stroke();
+    ctx.fillText('+' + Math.round(maxDelta), leftMargin - 5, 23);
+
+    // Negative max
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, height - 20);
+    ctx.lineTo(width, height - 20);
+    ctx.stroke();
+    ctx.fillText('-' + Math.round(maxDelta), leftMargin - 5, height - 17);
+
+    // Mid-positive
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, height / 4 + 5);
+    ctx.lineTo(width, height / 4 + 5);
+    ctx.stroke();
+    ctx.fillStyle = '#666';
+    ctx.fillText('+' + Math.round(maxDelta / 2), leftMargin - 5, height / 4 + 8);
+
+    // Mid-negative
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, height * 3 / 4 - 5);
+    ctx.lineTo(width, height * 3 / 4 - 5);
+    ctx.stroke();
+    ctx.fillText('-' + Math.round(maxDelta / 2), leftMargin - 5, height * 3 / 4 - 2);
+
+    // Draw Y scroll line (vertical scroll)
+    ctx.strokeStyle = '#4fc3f7';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    scrollGraphData.forEach((d, i) => {
+        const x = leftMargin + (d.time - minTime) * xScale;
+        const y = height / 2 - d.deltaY * yScale;
+
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+
+    // Draw time labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('0ms', leftMargin + 5, height - 5);
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(timeRange) + 'ms', width - 5, height - 5);
+}
+
+// Draw scroll X graph (horizontal scroll)
+function drawScrollXGraph() {
+    if (!scrollXGraphCtx || !scrollXGraphCanvas) return;
+
+    const width = scrollXGraphCanvas.width;
+    const height = scrollXGraphCanvas.height;
+    const ctx = scrollXGraphCtx;
+    const leftMargin = 45; // Space for Y-axis labels
+
+    // Clear canvas completely (prevents ghost effect)
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, width, height);
+
+    if (scrollGraphData.length < 2) {
+        // Draw placeholder text
+        ctx.fillStyle = '#666';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Scroll to see data', width / 2, height / 2);
+        return;
+    }
+
+    // Find data range
+    const maxTime = scrollGraphData[scrollGraphData.length - 1].time;
+    const minTime = scrollGraphData[0].time;
+    const timeRange = maxTime - minTime || 1;
+
+    let maxDelta = 1;
+    scrollGraphData.forEach(d => {
+        maxDelta = Math.max(maxDelta, Math.abs(d.deltaX));
+    });
+
+    // Scale factor
+    const graphWidth = width - leftMargin;
+    const xScale = graphWidth / timeRange;
+    const yScale = (height / 2 - 20) / maxDelta;
+
+    // Draw Y-axis
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, 10);
+    ctx.lineTo(leftMargin, height - 20);
+    ctx.stroke();
+
+    // Draw Y-axis labels and grid lines
+    ctx.fillStyle = '#888';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'right';
+
+    // Center line (0)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+    ctx.fillText('0', leftMargin - 5, height / 2 + 3);
+
+    // Positive max
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, 20);
+    ctx.lineTo(width, 20);
+    ctx.stroke();
+    ctx.fillText('+' + Math.round(maxDelta), leftMargin - 5, 23);
+
+    // Negative max
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, height - 20);
+    ctx.lineTo(width, height - 20);
+    ctx.stroke();
+    ctx.fillText('-' + Math.round(maxDelta), leftMargin - 5, height - 17);
+
+    // Mid-positive
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, height / 4 + 5);
+    ctx.lineTo(width, height / 4 + 5);
+    ctx.stroke();
+    ctx.fillStyle = '#666';
+    ctx.fillText('+' + Math.round(maxDelta / 2), leftMargin - 5, height / 4 + 8);
+
+    // Mid-negative
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, height * 3 / 4 - 5);
+    ctx.lineTo(width, height * 3 / 4 - 5);
+    ctx.stroke();
+    ctx.fillText('-' + Math.round(maxDelta / 2), leftMargin - 5, height * 3 / 4 - 2);
+
+    // Draw X scroll line (horizontal scroll)
+    ctx.strokeStyle = '#26c6da';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    scrollGraphData.forEach((d, i) => {
+        const x = leftMargin + (d.time - minTime) * xScale;
+        const y = height / 2 - d.deltaX * yScale;
+
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+
+    // Draw time labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('0ms', leftMargin + 5, height - 5);
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(timeRange) + 'ms', width - 5, height - 5);
+}
+
+// Draw zoom graph
+function drawZoomGraph() {
+    if (!zoomGraphCtx || !zoomGraphCanvas) return;
+
+    const width = zoomGraphCanvas.width;
+    const height = zoomGraphCanvas.height;
+    const ctx = zoomGraphCtx;
+
+    // Clear canvas completely (prevents ghost effect)
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, width, height);
+
+    if (zoomGraphData.length < 2) {
+        // Draw placeholder text
+        ctx.fillStyle = '#666';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Pinch to zoom to see data', width / 2, height / 2);
+        return;
+    }
+
+    // Draw grid
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+
+    // 1.0 baseline
+    const baselineY = height * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(0, baselineY);
+    ctx.lineTo(width, baselineY);
+    ctx.stroke();
+
+    // Draw "1.0" label
+    ctx.fillStyle = '#666';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('1.0', 5, baselineY - 5);
+
+    // Find data range
+    const maxTime = zoomGraphData[zoomGraphData.length - 1].time;
+    const minTime = zoomGraphData[0].time;
+    const timeRange = maxTime - minTime || 1;
+
+    let minLevel = 1, maxLevel = 1;
+    zoomGraphData.forEach(d => {
+        minLevel = Math.min(minLevel, d.level);
+        maxLevel = Math.max(maxLevel, d.level);
+    });
+
+    const levelRange = Math.max(maxLevel - minLevel, 0.5);
+
+    // Scale factor
+    const xScale = width / timeRange;
+    const yScale = (height - 40) / levelRange;
+
+    // Draw zoom level line
+    ctx.strokeStyle = '#ff9800';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    zoomGraphData.forEach((d, i) => {
+        const x = (d.time - minTime) * xScale;
+        const y = height - 20 - (d.level - minLevel) * yScale;
+
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+
+    // Draw time labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px Consolas, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('0ms', 5, height - 5);
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(timeRange) + 'ms', width - 5, height - 5);
+}
+
+// Add motion to history
+function addMotionToHistory(motion, duration) {
+    if (!motionHistoryList) return;
+
+    const historyItem = {
+        type: motion.type,
+        moveX: motion.moveX,
+        moveY: motion.moveY,
+        scrollX: motion.scrollX,
+        scrollY: motion.scrollY,
+        zoomLevel: motion.zoomLevel,
+        duration: duration,
+        time: new Date()
+    };
+
+    motionHistory.unshift(historyItem);
+    if (motionHistory.length > MAX_HISTORY_ITEMS) {
+        motionHistory.pop();
+    }
+
+    renderMotionHistory();
+}
+
+// Render motion history
+function renderMotionHistory() {
+    if (!motionHistoryList) return;
+
+    if (motionHistory.length === 0) {
+        motionHistoryList.innerHTML = '<div class="history-placeholder">No motions recorded yet</div>';
+        return;
+    }
+
+    motionHistoryList.innerHTML = motionHistory.map(item => {
+        let valuesStr = '';
+        if (item.type === 'move') {
+            valuesStr = `X: ${Math.round(item.moveX)}, Y: ${Math.round(item.moveY)}`;
+        } else if (item.type === 'scroll') {
+            valuesStr = `X: ${Math.round(item.scrollX)}, Y: ${Math.round(item.scrollY)}`;
+        } else if (item.type === 'zoom') {
+            valuesStr = `Level: ${item.zoomLevel.toFixed(2)}`;
+        }
+
+        const timeStr = item.time.toLocaleTimeString();
+
+        return `
+            <div class="history-item">
+                <span class="history-type ${item.type}">${item.type}</span>
+                <span class="history-values">${valuesStr}</span>
+                <span class="history-duration">${item.duration}ms</span>
+                <span class="history-time">${timeStr}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+// Clear graphs
+function clearGraphs() {
+    scrollGraphData = [];
+    zoomGraphData = [];
+    graphStartTime = Date.now();
+
+    currentMotion = {
+        type: 'none',
+        startTime: 0,
+        moveX: 0,
+        moveY: 0,
+        scrollX: 0,
+        scrollY: 0,
+        zoomDelta: 0,
+        zoomLevel: 1.0
+    };
+
+    updateMotionStatsDisplay();
+    updateMotionTypeDisplay('none');
+    updateMotionStatus('idle');
+
+    drawScrollYGraph();
+    drawScrollXGraph();
+    drawZoomGraph();
+}
+
+// Export data as JSON
+function exportGraphData() {
+    const data = {
+        exportTime: new Date().toISOString(),
+        scrollData: scrollGraphData,
+        zoomData: zoomGraphData,
+        history: motionHistory.map(h => ({
+            ...h,
+            time: h.time.toISOString()
+        }))
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `motion-data-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// Event listeners for Graph View buttons
+if (clearGraphsBtn) {
+    clearGraphsBtn.addEventListener('click', clearGraphs);
+}
+
+if (exportDataBtn) {
+    exportDataBtn.addEventListener('click', exportGraphData);
+}
+
+// Graph View wheel event handler (prevents actual scroll, captures data)
+if (graphView) {
+    graphView.addEventListener('wheel', (e) => {
+        if (!isGraphModeActive()) return;
+
+        e.preventDefault(); // Prevent page scroll
+
+        if (e.ctrlKey) {
+            // Zoom gesture
+            const delta = -e.deltaY * ZOOM_SENSITIVITY;
+
+            // Check if this is a new zoom motion (not active or different type)
+            // If so, start from 1.0, otherwise continue from current level
+            const baseLevel = (!isMotionActive || currentMotion.type !== 'zoom') ? 1.0 : currentMotion.zoomLevel;
+            const newLevel = Math.max(0.1, Math.min(5.0, baseLevel + delta));
+
+            updateMotion('zoom', {
+                delta: delta,
+                level: newLevel
+            });
+        } else {
+            // Scroll gesture
+            updateMotion('scroll', {
+                deltaX: e.deltaX,
+                deltaY: e.deltaY
+            });
+        }
+    }, { passive: false });
+
+    // Mouse move handler - tracks ALL cursor movement (not just when button is down)
+    let lastGraphMouseX = null;
+    let lastGraphMouseY = null;
+    let isGraphMouseTracking = false;
+
+    graphView.addEventListener('mouseenter', (e) => {
+        if (!isGraphModeActive()) return;
+        // Initialize position when mouse enters
+        lastGraphMouseX = e.clientX;
+        lastGraphMouseY = e.clientY;
+        isGraphMouseTracking = true;
+    });
+
+    graphView.addEventListener('mousemove', (e) => {
+        if (!isGraphModeActive()) return;
+
+        // Track all cursor movement regardless of button state
+        if (isGraphMouseTracking && lastGraphMouseX !== null && lastGraphMouseY !== null) {
+            const deltaX = e.clientX - lastGraphMouseX;
+            const deltaY = e.clientY - lastGraphMouseY;
+
+            // Only report if there's actual movement
+            if (deltaX !== 0 || deltaY !== 0) {
+                updateMotion('move', {
+                    deltaX: deltaX,
+                    deltaY: deltaY
+                });
+            }
+        }
+
+        lastGraphMouseX = e.clientX;
+        lastGraphMouseY = e.clientY;
+    });
+
+    graphView.addEventListener('mouseleave', () => {
+        isGraphMouseTracking = false;
+        lastGraphMouseX = null;
+        lastGraphMouseY = null;
+    });
+
+    // Touch handlers for mobile/touch devices
+    let lastGraphTouchX = 0;
+    let lastGraphTouchY = 0;
+    let graphTouchStartDist = 0;
+
+    graphView.addEventListener('touchstart', (e) => {
+        if (!isGraphModeActive()) return;
+
+        if (e.touches.length === 1) {
+            lastGraphTouchX = e.touches[0].clientX;
+            lastGraphTouchY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+            // Pinch start
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            graphTouchStartDist = Math.sqrt(dx * dx + dy * dy);
+        }
+    }, { passive: true });
+
+    graphView.addEventListener('touchmove', (e) => {
+        if (!isGraphModeActive()) return;
+
+        e.preventDefault(); // Prevent actual scrolling
+
+        if (e.touches.length === 1) {
+            const deltaX = e.touches[0].clientX - lastGraphTouchX;
+            const deltaY = e.touches[0].clientY - lastGraphTouchY;
+
+            // Treat single finger swipe as scroll
+            updateMotion('scroll', {
+                deltaX: -deltaX,
+                deltaY: -deltaY
+            });
+
+            lastGraphTouchX = e.touches[0].clientX;
+            lastGraphTouchY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+            // Pinch zoom
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            const scaleDelta = (dist - graphTouchStartDist) * 0.01;
+
+            // Check if this is a new zoom motion - if so, start from 1.0
+            const baseLevel = (!isMotionActive || currentMotion.type !== 'zoom') ? 1.0 : currentMotion.zoomLevel;
+            const newLevel = Math.max(0.1, Math.min(5.0, baseLevel + scaleDelta));
+
+            updateMotion('zoom', {
+                delta: scaleDelta,
+                level: newLevel
+            });
+
+            graphTouchStartDist = dist;
+        }
+    }, { passive: false });
+}
+
+// Initialize graph view when tab is activated
+tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        if (tab === 'graph') {
+            setTimeout(() => {
+                initGraphCanvases();
+                drawScrollYGraph();
+                drawScrollXGraph();
+                drawZoomGraph();
+            }, 50);
+        }
+    });
+});

@@ -1148,3 +1148,356 @@ h2 {
     font-size: 11px;
     color: #999;
 }
+
+/* ==================== */
+/* Graph View Styles    */
+/* ==================== */
+
+#graph-view {
+    display: none;
+    height: calc(100% - 54px);
+    overflow: hidden;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+#graph-view.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.graph-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.graph-header h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.2rem;
+    color: #a0a0ff;
+}
+
+.graph-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.graph-btn {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    background: rgba(255, 255, 255, 0.1);
+    color: #aaa;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.graph-btn:hover {
+    background: linear-gradient(145deg, #7c4dff, #651fff);
+    border-color: #7c4dff;
+    color: #fff;
+}
+
+.graph-container {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr 1fr 1fr;
+    grid-template-rows: 1fr auto;
+    gap: 15px;
+    padding: 15px;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Stats Panel */
+.graph-stats-panel {
+    grid-row: 1 / 3;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.graph-stats-panel h3 {
+    font-size: 1rem;
+    color: #a0a0ff;
+    margin: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(160, 160, 255, 0.3);
+}
+
+.motion-type-indicator {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+}
+
+.motion-label {
+    font-size: 0.85rem;
+    color: #888;
+}
+
+.motion-value {
+    font-size: 1rem;
+    font-weight: bold;
+    font-family: 'Consolas', monospace;
+    color: #4fc3f7;
+    text-transform: uppercase;
+}
+
+.motion-value.move {
+    color: #81c784;
+}
+
+.motion-value.scroll {
+    color: #4fc3f7;
+}
+
+.motion-value.zoom {
+    color: #ff9800;
+}
+
+.motion-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.motion-stat {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.7rem;
+    color: #888;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: bold;
+    font-family: 'Consolas', monospace;
+    color: #4fc3f7;
+}
+
+.motion-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    margin-top: auto;
+}
+
+.status-label {
+    font-size: 0.85rem;
+    color: #888;
+}
+
+.status-value {
+    font-size: 0.9rem;
+    font-weight: bold;
+    font-family: 'Consolas', monospace;
+    padding: 4px 12px;
+    border-radius: 12px;
+    text-transform: uppercase;
+}
+
+.status-value.idle {
+    color: #888;
+    background: rgba(136, 136, 136, 0.2);
+}
+
+.status-value.active {
+    color: #81c784;
+    background: rgba(129, 199, 132, 0.2);
+}
+
+.status-value.inertia {
+    color: #ff9800;
+    background: rgba(255, 152, 0, 0.2);
+}
+
+/* Graph Panels */
+.graph-panel {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.graph-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+}
+
+.graph-title h3 {
+    font-size: 0.95rem;
+    color: #a0a0ff;
+    margin: 0;
+}
+
+.graph-subtitle {
+    font-size: 0.75rem;
+    color: #666;
+    font-style: italic;
+}
+
+.graph-canvas-container {
+    flex: 1;
+    position: relative;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 150px;
+}
+
+.graph-canvas-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.graph-legend {
+    display: flex;
+    gap: 20px;
+    padding-top: 10px;
+    font-size: 0.75rem;
+}
+
+.legend-item {
+    color: #888;
+}
+
+.scroll-y-legend {
+    color: #4fc3f7;
+}
+
+.scroll-x-legend {
+    color: #26c6da;
+}
+
+.zoom-legend {
+    color: #ff9800;
+}
+
+/* History Panel */
+.graph-history-panel {
+    grid-column: 2 / 5;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 200px;
+}
+
+.graph-history-panel h3 {
+    font-size: 0.95rem;
+    color: #a0a0ff;
+    margin: 0 0 10px 0;
+}
+
+.motion-history-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-placeholder {
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+
+.history-item .history-type {
+    font-weight: bold;
+    font-family: 'Consolas', monospace;
+    min-width: 60px;
+    text-transform: uppercase;
+}
+
+.history-item .history-type.move {
+    color: #81c784;
+}
+
+.history-item .history-type.scroll {
+    color: #4fc3f7;
+}
+
+.history-item .history-type.zoom {
+    color: #ff9800;
+}
+
+.history-item .history-values {
+    flex: 1;
+    color: #aaa;
+    font-family: 'Consolas', monospace;
+}
+
+.history-item .history-duration {
+    color: #666;
+    font-size: 0.75rem;
+}
+
+.history-item .history-time {
+    color: #555;
+    font-size: 0.7rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1000px) {
+    .graph-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto;
+    }
+
+    .graph-stats-panel {
+        grid-row: auto;
+    }
+
+    .graph-history-panel {
+        grid-column: auto;
+    }
+}
