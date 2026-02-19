@@ -798,7 +798,7 @@ browseView.addEventListener('contextmenu', (e) => {
 
     // Do NOT call e.preventDefault() - allow native browser menu
     setCurrentState('click');
-    addBrowseLogEntry('right-click (native menu)', 'mouse');
+    addLogEntry('right-click (native menu)', 'mouse');
 });
 
 // ==================== //
@@ -2161,5 +2161,624 @@ tabBtns.forEach(btn => {
                 drawZoomGraph();
             }, 50);
         }
+        if (tab === 'shapes') {
+            setTimeout(() => {
+                initShapesCanvas();
+            }, 50);
+        }
     });
 });
+
+// ==================== //
+// Shape Tests          //
+// ==================== //
+
+const shapesView = document.getElementById('shapes-view');
+const shapesCanvas = document.getElementById('shapes-canvas');
+const shapesCtx = shapesCanvas ? shapesCanvas.getContext('2d') : null;
+
+// Shape Test DOM elements
+const shapeOffsetX = document.getElementById('shape-offset-x');
+const shapeOffsetY = document.getElementById('shape-offset-y');
+const shapeOffsetDist = document.getElementById('shape-offset-dist');
+const shapeTestState = document.getElementById('shape-test-state');
+const shapeProgress = document.getElementById('shape-progress');
+const shapeInstruction = document.getElementById('shape-instruction');
+const shapeResults = document.getElementById('shape-results');
+const resultAvgOffset = document.getElementById('result-avg-offset');
+const resultMaxOffset = document.getElementById('result-max-offset');
+const resultAccuracy = document.getElementById('result-accuracy');
+const resetShapeTestBtn = document.getElementById('reset-shape-test');
+const shapeBtns = document.querySelectorAll('.shape-btn');
+
+// Shape Test State
+const SHAPE_SIZE = 200; // Fixed size for shapes
+let currentShape = 'circle';
+let shapeTestActive = false;
+let shapeTestCompleted = false;
+let shapeStartPoint = { x: 0, y: 0 };
+let shapeCenter = { x: 0, y: 0 };
+let userPath = [];
+let expectedPath = [];
+let offsetHistory = [];
+let currentPathIndex = 0;
+let maxPathIndexReached = 0; // Track the furthest point reached (to prevent jumping back to start)
+let hasPassedHalfway = false; // Track if user has gone past halfway point
+
+function isShapesModeActive() {
+    return shapesView && shapesView.classList.contains('active');
+}
+
+// Initialize shapes canvas
+function initShapesCanvas() {
+    if (!shapesCanvas) return;
+    const container = shapesCanvas.parentElement;
+    shapesCanvas.width = container.clientWidth;
+    shapesCanvas.height = container.clientHeight;
+    drawShapesCanvas();
+}
+
+// Resize observer for shapes canvas
+const shapesResizeObserver = new ResizeObserver(() => {
+    if (isShapesModeActive()) {
+        initShapesCanvas();
+    }
+});
+
+if (shapesCanvas && shapesCanvas.parentElement) {
+    shapesResizeObserver.observe(shapesCanvas.parentElement);
+}
+
+// Shape button selection
+shapeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (shapeTestActive) return; // Don't change shape during test
+
+        shapeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentShape = btn.dataset.shape;
+        resetShapeTest();
+    });
+});
+
+// Generate expected path points for each shape
+function generateExpectedPath(startX, startY) {
+    const path = [];
+    const numPoints = 100;
+
+    switch (currentShape) {
+        case 'circle':
+            // Generate a 330° arc (not full circle) so start and end are physically separated
+            // This prevents accidental completion when moving in the wrong direction
+            // Start at angle 0 (rightmost point), end at 330° (30° before completing)
+            const arcAngle = (330 / 360) * Math.PI * 2; // 330 degrees in radians
+            shapeCenter = { x: startX - (SHAPE_SIZE / 2), y: startY };
+            for (let i = 0; i <= numPoints; i++) {
+                const angle = (i / numPoints) * arcAngle;
+                path.push({
+                    x: shapeCenter.x + Math.cos(angle) * (SHAPE_SIZE / 2),
+                    y: shapeCenter.y + Math.sin(angle) * (SHAPE_SIZE / 2)
+                });
+            }
+            break;
+
+        case 'horizontal':
+            for (let i = 0; i <= numPoints; i++) {
+                path.push({
+                    x: startX + (i / numPoints) * SHAPE_SIZE,
+                    y: startY
+                });
+            }
+            break;
+
+        case 'vertical':
+            for (let i = 0; i <= numPoints; i++) {
+                path.push({
+                    x: startX,
+                    y: startY + (i / numPoints) * SHAPE_SIZE
+                });
+            }
+            break;
+
+        case 'diagonal-up':
+            for (let i = 0; i <= numPoints; i++) {
+                path.push({
+                    x: startX + (i / numPoints) * SHAPE_SIZE,
+                    y: startY - (i / numPoints) * SHAPE_SIZE
+                });
+            }
+            break;
+
+        case 'diagonal-down':
+            for (let i = 0; i <= numPoints; i++) {
+                path.push({
+                    x: startX + (i / numPoints) * SHAPE_SIZE,
+                    y: startY + (i / numPoints) * SHAPE_SIZE
+                });
+            }
+            break;
+    }
+
+    return path;
+}
+
+// Find closest point on expected path and calculate offset
+function calculateOffset(userX, userY) {
+    if (expectedPath.length === 0) return { offsetX: 0, offsetY: 0, distance: 0, pathIndex: 0 };
+
+    let minDist = Infinity;
+    let closestIndex = 0;
+    let closestPoint = expectedPath[0];
+
+    // Search from current index forward (with some look-back)
+    const searchStart = Math.max(0, currentPathIndex - 5);
+    const searchEnd = Math.min(expectedPath.length - 1, currentPathIndex + 30);
+
+    for (let i = searchStart; i <= searchEnd; i++) {
+        const point = expectedPath[i];
+        const dist = Math.sqrt(Math.pow(userX - point.x, 2) + Math.pow(userY - point.y, 2));
+        if (dist < minDist) {
+            minDist = dist;
+            closestIndex = i;
+            closestPoint = point;
+        }
+    }
+
+    // Also check the entire path for better accuracy
+    for (let i = 0; i < expectedPath.length; i++) {
+        const point = expectedPath[i];
+        const dist = Math.sqrt(Math.pow(userX - point.x, 2) + Math.pow(userY - point.y, 2));
+        if (dist < minDist) {
+            minDist = dist;
+            closestIndex = i;
+            closestPoint = point;
+        }
+    }
+
+    return {
+        offsetX: userX - closestPoint.x,
+        offsetY: userY - closestPoint.y,
+        distance: minDist,
+        pathIndex: closestIndex
+    };
+}
+
+// Draw the shapes canvas
+function drawShapesCanvas() {
+    if (!shapesCtx || !shapesCanvas) return;
+
+    const ctx = shapesCtx;
+    const width = shapesCanvas.width;
+    const height = shapesCanvas.height;
+
+    // Clear canvas with white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw guide path (semi-transparent) - show during tracing AND after completion
+    if ((shapeTestActive || shapeTestCompleted) && expectedPath.length > 0) {
+        ctx.strokeStyle = 'rgba(100, 100, 255, 0.3)';
+        ctx.lineWidth = 20;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+
+        expectedPath.forEach((point, i) => {
+            if (i === 0) {
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+        });
+
+        ctx.stroke();
+
+        // For circle shape, draw the full circle guide on top (so it looks complete)
+        if (currentShape === 'circle' && shapeCenter) {
+            ctx.strokeStyle = 'rgba(100, 100, 255, 0.3)';
+            ctx.lineWidth = 20;
+            ctx.beginPath();
+            ctx.arc(shapeCenter.x, shapeCenter.y, SHAPE_SIZE / 2, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // Draw start point marker
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.8)';
+        ctx.beginPath();
+        ctx.arc(expectedPath[0].x, expectedPath[0].y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('S', expectedPath[0].x, expectedPath[0].y);
+
+        // Draw end point marker (always show, including for circle)
+        const endPoint = expectedPath[expectedPath.length - 1];
+        ctx.fillStyle = 'rgba(244, 67, 54, 0.8)';
+        ctx.beginPath();
+        ctx.arc(endPoint.x, endPoint.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText('E', endPoint.x, endPoint.y);
+    }
+
+    // Draw user path in black (during tracing AND after completion)
+    if ((shapeTestActive || shapeTestCompleted) && userPath.length > 1) {
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+
+        userPath.forEach((point, i) => {
+            if (i === 0) {
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+        });
+        ctx.stroke();
+    }
+
+    // Draw instruction text in center when not active
+    if (!shapeTestActive && !shapeTestCompleted) {
+        ctx.fillStyle = '#999';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Click anywhere to start the test', width / 2, height / 2);
+    }
+}
+
+// Update offset display (both sidebar and header)
+function updateOffsetDisplay(offsetX, offsetY, distance) {
+    // Update sidebar elements
+    if (shapeOffsetX) {
+        shapeOffsetX.textContent = Math.round(offsetX);
+        shapeOffsetX.className = 'offset-value' + (Math.abs(offsetX) > 20 ? ' warning' : '') + (Math.abs(offsetX) > 50 ? ' error' : '');
+    }
+    if (shapeOffsetY) {
+        shapeOffsetY.textContent = Math.round(offsetY);
+        shapeOffsetY.className = 'offset-value' + (Math.abs(offsetY) > 20 ? ' warning' : '') + (Math.abs(offsetY) > 50 ? ' error' : '');
+    }
+    if (shapeOffsetDist) {
+        shapeOffsetDist.textContent = Math.round(distance);
+        shapeOffsetDist.className = 'offset-value' + (distance > 20 ? ' warning' : '') + (distance > 50 ? ' error' : '');
+    }
+
+    // Update header elements
+    const headerOffsetX = document.getElementById('header-offset-x');
+    const headerOffsetY = document.getElementById('header-offset-y');
+    const headerOffsetDist = document.getElementById('header-offset-dist');
+
+    if (headerOffsetX) {
+        headerOffsetX.textContent = Math.round(offsetX);
+        headerOffsetX.className = 'header-stat-value' + (Math.abs(offsetX) > 20 ? ' warning' : '') + (Math.abs(offsetX) > 50 ? ' error' : '');
+    }
+    if (headerOffsetY) {
+        headerOffsetY.textContent = Math.round(offsetY);
+        headerOffsetY.className = 'header-stat-value' + (Math.abs(offsetY) > 20 ? ' warning' : '') + (Math.abs(offsetY) > 50 ? ' error' : '');
+    }
+    if (headerOffsetDist) {
+        headerOffsetDist.textContent = Math.round(distance);
+        headerOffsetDist.className = 'header-stat-value' + (distance > 20 ? ' warning' : '') + (distance > 50 ? ' error' : '');
+    }
+}
+
+// Update progress display (both sidebar and header)
+function updateProgress() {
+    const progress = Math.min(100, Math.round((currentPathIndex / (expectedPath.length - 1)) * 100));
+
+    // Update sidebar
+    if (shapeProgress) {
+        shapeProgress.textContent = progress + '%';
+    }
+
+    // Update header
+    const headerProgress = document.getElementById('header-progress');
+    if (headerProgress) {
+        headerProgress.textContent = progress + '%';
+    }
+}
+
+// Update test state (both sidebar and header)
+function updateTestState(state, label) {
+    // Update sidebar
+    if (shapeTestState) {
+        shapeTestState.textContent = label;
+        shapeTestState.className = 'status-badge ' + state;
+    }
+
+    // Update header
+    const headerState = document.getElementById('header-test-state');
+    if (headerState) {
+        headerState.textContent = label;
+        headerState.className = 'header-status-badge ' + state;
+    }
+}
+
+// Update results (both sidebar and header)
+function updateResults(avgOffset, maxOffset, accuracy) {
+    // Update sidebar
+    if (shapeAvgOffset) shapeAvgOffset.textContent = avgOffset.toFixed(1);
+    if (shapeMaxOffset) shapeMaxOffset.textContent = maxOffset.toFixed(1);
+    if (shapeAccuracy) shapeAccuracy.textContent = accuracy.toFixed(0) + '%';
+    if (shapeResults) shapeResults.classList.remove('hidden');
+
+    // Update header
+    const headerResults = document.getElementById('header-results');
+    const headerAvg = document.getElementById('header-result-avg');
+    const headerMax = document.getElementById('header-result-max');
+    const headerAcc = document.getElementById('header-result-acc');
+
+    if (headerAvg) headerAvg.textContent = avgOffset.toFixed(1);
+    if (headerMax) headerMax.textContent = maxOffset.toFixed(1);
+    if (headerAcc) headerAcc.textContent = accuracy.toFixed(0) + '%';
+    if (headerResults) headerResults.classList.remove('hidden');
+}
+
+// Start shape test
+function startShapeTest(startX, startY) {
+    shapeTestActive = true;
+    shapeTestCompleted = false;
+    shapeStartPoint = { x: startX, y: startY };
+    userPath = [{ x: startX, y: startY }];
+    offsetHistory = [];
+    currentPathIndex = 0;
+    maxPathIndexReached = 0;
+    hasPassedHalfway = false;
+
+    // Generate expected path
+    expectedPath = generateExpectedPath(startX, startY);
+
+    // Update UI - use helper functions for header updates
+    updateTestState('tracing', 'Tracing');
+    if (shapeInstruction) {
+        shapeInstruction.textContent = 'Trace the highlighted path';
+    }
+    if (shapeResults) {
+        shapeResults.classList.add('hidden');
+    }
+    // Hide header results too
+    const headerResults = document.getElementById('header-results');
+    if (headerResults) headerResults.classList.add('hidden');
+
+    updateOffsetDisplay(0, 0, 0);
+    updateProgress();
+    drawShapesCanvas();
+}
+
+// Update shape test with new cursor position
+function updateShapeTest(x, y) {
+    if (!shapeTestActive) return;
+
+    userPath.push({ x, y });
+
+    // Calculate offset from expected path
+    const offset = calculateOffset(x, y);
+    offsetHistory.push(offset.distance);
+
+    // Update current path index - only move forward, don't jump backwards
+    // This prevents the circle from completing immediately by finding the end point
+    if (offset.pathIndex > maxPathIndexReached) {
+        maxPathIndexReached = offset.pathIndex;
+        currentPathIndex = offset.pathIndex;
+    }
+
+    // Track if we've passed the halfway point
+    if (maxPathIndexReached >= expectedPath.length / 2) {
+        hasPassedHalfway = true;
+    }
+
+    updateOffsetDisplay(offset.offsetX, offset.offsetY, offset.distance);
+    updateProgress();
+
+    // Check for completion
+    const progress = maxPathIndexReached / (expectedPath.length - 1);
+
+    if (currentShape === 'circle') {
+        // For circle: must have passed halfway AND be near the start point
+        if (hasPassedHalfway && progress >= 0.85) {
+            const distToStart = Math.sqrt(
+                Math.pow(x - expectedPath[0].x, 2) +
+                Math.pow(y - expectedPath[0].y, 2)
+            );
+            if (distToStart < 30) {
+                completeShapeTest();
+                return;
+            }
+        }
+    } else {
+        // For lines, complete when we reach near the end
+        if (progress >= 0.90) {
+            const endPoint = expectedPath[expectedPath.length - 1];
+            const distToEnd = Math.sqrt(
+                Math.pow(x - endPoint.x, 2) +
+                Math.pow(y - endPoint.y, 2)
+            );
+            if (distToEnd < 30) {
+                completeShapeTest();
+                return;
+            }
+        }
+    }
+
+    drawShapesCanvas();
+}
+
+// Update progress display
+function updateProgress() {
+    if (!shapeProgress) return;
+
+    const progress = Math.min(100, Math.round((maxPathIndexReached / (expectedPath.length - 1)) * 100));
+    shapeProgress.textContent = progress + '%';
+    
+    // Update header progress
+    const headerProgress = document.getElementById('header-progress');
+    if (headerProgress) {
+        headerProgress.textContent = progress + '%';
+    }
+}
+
+// Complete shape test
+function completeShapeTest() {
+    shapeTestActive = false;
+    shapeTestCompleted = true;
+
+    // Calculate results
+    const avgOffset = offsetHistory.length > 0
+        ? offsetHistory.reduce((a, b) => a + b, 0) / offsetHistory.length
+        : 0;
+    const maxOffset = offsetHistory.length > 0
+        ? Math.max(...offsetHistory)
+        : 0;
+
+    // Calculate accuracy (100% = perfect, decreases with offset)
+    const accuracy = Math.max(0, 100 - (avgOffset * 2));
+
+    // Update UI - use helper function for header
+    updateTestState('completed', 'Complete');
+    
+    if (shapeInstruction) {
+        shapeInstruction.textContent = 'Test complete! Click Reset to try again';
+    }
+    if (shapeProgress) {
+        shapeProgress.textContent = '100%';
+    }
+    
+    // Update header progress
+    const headerProgress = document.getElementById('header-progress');
+    if (headerProgress) {
+        headerProgress.textContent = '100%';
+    }
+
+    // Show results - use helper function
+    updateResults(avgOffset, maxOffset, accuracy);
+
+    // Keep user path visible (don't clear it)
+    drawShapesCanvas();
+}
+
+// Reset shape test
+function resetShapeTest() {
+    shapeTestActive = false;
+    shapeTestCompleted = false;
+    userPath = [];
+    expectedPath = [];
+    offsetHistory = [];
+    currentPathIndex = 0;
+    maxPathIndexReached = 0;
+    hasPassedHalfway = false;
+
+    // Reset sidebar UI elements
+    const instructionEl = document.getElementById('shape-instruction');
+    const resultsEl = document.getElementById('shape-results');
+
+    if (instructionEl) {
+        instructionEl.textContent = 'Click anywhere to start the test';
+    }
+    if (resultsEl) {
+        resultsEl.classList.add('hidden');
+    }
+
+    // Reset header UI elements
+    updateTestState('idle', 'Ready');
+    
+    const headerProgress = document.getElementById('header-progress');
+    if (headerProgress) {
+        headerProgress.textContent = '0%';
+    }
+    
+    const headerResults = document.getElementById('header-results');
+    if (headerResults) {
+        headerResults.classList.add('hidden');
+    }
+    
+    // Reset header offset display
+    const headerOffsetX = document.getElementById('header-offset-x');
+    const headerOffsetY = document.getElementById('header-offset-y');
+    const headerOffsetDist = document.getElementById('header-offset-dist');
+    if (headerOffsetX) headerOffsetX.textContent = '0';
+    if (headerOffsetY) headerOffsetY.textContent = '0';
+    if (headerOffsetDist) headerOffsetDist.textContent = '0';
+
+    // Clear and redraw canvas
+    if (shapesCanvas && shapesCtx) {
+        shapesCtx.clearRect(0, 0, shapesCanvas.width, shapesCanvas.height);
+    }
+}
+
+// Expose resetShapeTest globally for inline onclick
+window.resetShapeTest = resetShapeTest;
+
+// Event listeners for shapes canvas
+if (shapesCanvas) {
+    shapesCanvas.addEventListener('mousedown', (e) => {
+        if (!isShapesModeActive()) return;
+        if (shapeTestCompleted) return; // Must reset first
+
+        const rect = shapesCanvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (shapesCanvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (shapesCanvas.height / rect.height);
+
+        if (!shapeTestActive) {
+            startShapeTest(x, y);
+        }
+    });
+
+    shapesCanvas.addEventListener('mousemove', (e) => {
+        if (!isShapesModeActive()) return;
+        if (!shapeTestActive) return;
+
+        const rect = shapesCanvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (shapesCanvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (shapesCanvas.height / rect.height);
+
+        updateShapeTest(x, y);
+    });
+
+    // Touch support
+    shapesCanvas.addEventListener('touchstart', (e) => {
+        if (!isShapesModeActive()) return;
+        if (shapeTestCompleted) return;
+        e.preventDefault();
+
+        const rect = shapesCanvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const x = (touch.clientX - rect.left) * (shapesCanvas.width / rect.width);
+        const y = (touch.clientY - rect.top) * (shapesCanvas.height / rect.height);
+
+        if (!shapeTestActive) {
+            startShapeTest(x, y);
+        }
+    }, { passive: false });
+
+    shapesCanvas.addEventListener('touchmove', (e) => {
+        if (!isShapesModeActive()) return;
+        if (!shapeTestActive) return;
+        e.preventDefault();
+
+        const rect = shapesCanvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const x = (touch.clientX - rect.left) * (shapesCanvas.width / rect.width);
+        const y = (touch.clientY - rect.top) * (shapesCanvas.height / rect.height);
+
+        updateShapeTest(x, y);
+    }, { passive: false });
+}
+
+// Reset button - attach with debugging
+if (resetShapeTestBtn) {
+    console.log('Reset button element found, attaching listener');
+    resetShapeTestBtn.addEventListener('click', (e) => {
+        console.log('Reset button clicked - handler triggered');
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Calling resetShapeTest()');
+        resetShapeTest();
+        console.log('resetShapeTest() completed');
+    });
+} else {
+    console.error('Reset button element NOT found!');
+}

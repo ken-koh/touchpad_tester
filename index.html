@@ -717,6 +717,98 @@
         </div>
     </div>
 
+    <!-- Shape Tests View -->
+    <div id="shapes-view" class="view">
+        <div class="shapes-header">
+            <div class="shapes-header-left">
+                <h2>Shape Tracing Tests</h2>
+                <p class="shapes-description">Select a shape, click to start tracing, follow the guide path.</p>
+            </div>
+            <div class="shapes-header-stats">
+                <div class="header-stat-group">
+                    <span class="header-stat-label">Offset:</span>
+                    <span class="header-stat">X: <span id="header-offset-x" class="header-stat-value">0</span></span>
+                    <span class="header-stat">Y: <span id="header-offset-y" class="header-stat-value">0</span></span>
+                    <span class="header-stat">Dist: <span id="header-offset-dist" class="header-stat-value">0</span></span>
+                </div>
+                <div class="header-stat-group">
+                    <span class="header-stat-label">Status:</span>
+                    <span id="header-test-state" class="header-status-badge idle">Ready</span>
+                </div>
+                <div class="header-stat-group">
+                    <span class="header-stat-label">Progress:</span>
+                    <span id="header-progress" class="header-stat-value">0%</span>
+                </div>
+                <div id="header-results" class="header-stat-group header-results hidden">
+                    <span class="header-stat-label">Results:</span>
+                    <span class="header-stat">Avg: <span id="header-result-avg" class="header-result-value">0</span></span>
+                    <span class="header-stat">Max: <span id="header-result-max" class="header-result-value">0</span></span>
+                    <span class="header-stat">Acc: <span id="header-result-acc" class="header-result-value">0%</span></span>
+                </div>
+            </div>
+            <button id="header-reset-btn" class="header-reset-btn" onclick="resetShapeTest();">Reset</button>
+        </div>
+
+        <div class="shapes-container">
+            <!-- Shape Selection Panel -->
+            <div class="shapes-control-panel">
+                <h3>Select Shape</h3>
+                <div class="shape-buttons">
+                    <button class="shape-btn active" data-shape="circle">
+                        <span class="shape-icon">◯</span>
+                        <span class="shape-name">Circle</span>
+                    </button>
+                    <button class="shape-btn" data-shape="horizontal">
+                        <span class="shape-icon">―</span>
+                        <span class="shape-name">Horizontal</span>
+                    </button>
+                    <button class="shape-btn" data-shape="vertical">
+                        <span class="shape-icon">│</span>
+                        <span class="shape-name">Vertical</span>
+                    </button>
+                    <button class="shape-btn" data-shape="diagonal-up">
+                        <span class="shape-icon">╱</span>
+                        <span class="shape-name">Diagonal ↗</span>
+                    </button>
+                    <button class="shape-btn" data-shape="diagonal-down">
+                        <span class="shape-icon">╲</span>
+                        <span class="shape-name">Diagonal ↘</span>
+                    </button>
+                </div>
+
+                <!-- Results Panel (shown after completion) -->
+                <div id="shape-results" class="results-panel hidden">
+                    <h3>Results</h3>
+                    <div class="results-grid">
+                        <div class="result-item">
+                            <span class="result-label">Avg Offset</span>
+                            <span id="result-avg-offset" class="result-value">0</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Max Offset</span>
+                            <span id="result-max-offset" class="result-value">0</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Accuracy</span>
+                            <span id="result-accuracy" class="result-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reset Button -->
+                <button id="reset-shape-test" class="reset-shape-btn" onclick="console.log('onclick fired'); resetShapeTest();">Reset Test</button>
+            </div>
+
+            <!-- Canvas Area -->
+            <div class="shapes-canvas-area">
+                <canvas id="shapes-canvas"></canvas>
+                <div class="canvas-instructions">
+                    <span id="shape-instruction">Click anywhere to start the test</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
