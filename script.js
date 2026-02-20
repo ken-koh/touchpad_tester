@@ -997,6 +997,7 @@ function isDebugModeActive() {
     return debugView && debugView.classList.contains('active');
 }
 
+// Debug scroll overlay - keep for VR scroll detection
 if (debugScrollOverlay) {
     // Center the scroll position initially
     debugScrollOverlay.scrollTop = 5000;
@@ -1015,13 +1016,13 @@ if (debugScrollOverlay) {
             // Update scroll display directly (same as wheel handler)
             deltaX.textContent = Math.round(scrollDeltaX);
             deltaY.textContent = Math.round(scrollDeltaY);
-            
+
             scrollTotalX += scrollDeltaX;
             scrollTotalY += scrollDeltaY;
-            
+
             totalX.textContent = Math.round(scrollTotalX);
             totalY.textContent = Math.round(scrollTotalY);
-            
+
             setCurrentState('scroll');
         }
 
@@ -1037,6 +1038,55 @@ if (debugScrollOverlay) {
             debugScrollOverlay.scrollLeft = 5000;
             lastDebugOverlayScrollLeft = 5000;
         }
+    }, { passive: true });
+}
+
+// Touch-based scroll detection for debug view (for VR headsets)
+let debugTouchScrollStartY = 0;
+let debugTouchScrollStartX = 0;
+let debugTouchScrollLastY = 0;
+let debugTouchScrollLastX = 0;
+let debugTouchScrolling = false;
+
+if (debugView) {
+    debugView.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            debugTouchScrollStartY = e.touches[0].clientY;
+            debugTouchScrollStartX = e.touches[0].clientX;
+            debugTouchScrollLastY = debugTouchScrollStartY;
+            debugTouchScrollLastX = debugTouchScrollStartX;
+            debugTouchScrolling = true;
+        }
+    }, { passive: true });
+
+    debugView.addEventListener('touchmove', (e) => {
+        if (!isDebugModeActive()) return;
+        if (e.touches.length === 1 && debugTouchScrolling) {
+            const currentY = e.touches[0].clientY;
+            const currentX = e.touches[0].clientX;
+            const scrollDeltaY = debugTouchScrollLastY - currentY;
+            const scrollDeltaX = debugTouchScrollLastX - currentX;
+
+            if (Math.abs(scrollDeltaY) >= 2 || Math.abs(scrollDeltaX) >= 2) {
+                deltaX.textContent = Math.round(scrollDeltaX);
+                deltaY.textContent = Math.round(scrollDeltaY);
+
+                scrollTotalX += scrollDeltaX;
+                scrollTotalY += scrollDeltaY;
+
+                totalX.textContent = Math.round(scrollTotalX);
+                totalY.textContent = Math.round(scrollTotalY);
+
+                setCurrentState('scroll');
+            }
+
+            debugTouchScrollLastY = currentY;
+            debugTouchScrollLastX = currentX;
+        }
+    }, { passive: true });
+
+    debugView.addEventListener('touchend', () => {
+        debugTouchScrolling = false;
     }, { passive: true });
 }
 
