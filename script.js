@@ -987,6 +987,51 @@ if (debugView) {
     }, { passive: false });
 }
 
+// Debug scroll overlay for VR scroll detection
+const debugScrollOverlay = document.getElementById('debug-scroll-overlay');
+let lastDebugOverlayScrollTop = 5000;
+let lastDebugOverlayScrollLeft = 5000;
+
+function isDebugModeActive() {
+    const debugView = document.getElementById('debug-view');
+    return debugView && debugView.classList.contains('active');
+}
+
+if (debugScrollOverlay) {
+    // Center the scroll position initially
+    debugScrollOverlay.scrollTop = 5000;
+    debugScrollOverlay.scrollLeft = 5000;
+
+    debugScrollOverlay.addEventListener('scroll', () => {
+        if (!isDebugModeActive()) return;
+
+        const currentTop = debugScrollOverlay.scrollTop;
+        const currentLeft = debugScrollOverlay.scrollLeft;
+        const deltaY = currentTop - lastDebugOverlayScrollTop;
+        const deltaX = currentLeft - lastDebugOverlayScrollLeft;
+
+        // Only process significant scroll deltas
+        if (Math.abs(deltaY) >= 2 || Math.abs(deltaX) >= 2) {
+            // Update scroll display
+            handleScroll({ deltaX: deltaX, deltaY: deltaY });
+            setCurrentState('scroll');
+        }
+
+        lastDebugOverlayScrollTop = currentTop;
+        lastDebugOverlayScrollLeft = currentLeft;
+
+        // Re-center when getting close to edges to enable infinite scrolling
+        if (currentTop < 1000 || currentTop > 9000) {
+            debugScrollOverlay.scrollTop = 5000;
+            lastDebugOverlayScrollTop = 5000;
+        }
+        if (currentLeft < 1000 || currentLeft > 9000) {
+            debugScrollOverlay.scrollLeft = 5000;
+            lastDebugOverlayScrollLeft = 5000;
+        }
+    }, { passive: true });
+}
+
 // Initialize zoom visualization on load
 window.addEventListener('load', () => {
     updateZoomVisualization();
