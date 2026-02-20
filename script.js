@@ -5,16 +5,31 @@ const totalX = document.getElementById('total-x');
 const totalY = document.getElementById('total-y');
 const resetScrollBtn = document.getElementById('reset-scroll');
 
-// Prevent browser zoom globally
+// Views where browser zoom should be disabled
+const noZoomViews = ['debug-view', 'graph-view', 'shapes-view'];
+
+function isInNoZoomView() {
+    // Check if any no-zoom view is currently visible/active
+    for (const viewId of noZoomViews) {
+        const view = document.getElementById(viewId);
+        if (view && view.classList.contains('active')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Prevent browser zoom only on specific views
 document.addEventListener('wheel', (e) => {
-    if (e.ctrlKey) {
+    if (e.ctrlKey && isInNoZoomView()) {
         e.preventDefault();
     }
 }, { passive: false });
 
-// Prevent double-tap zoom on touch devices
+// Prevent double-tap zoom on touch devices only on specific views
 let lastTouchEnd = 0;
 document.addEventListener('touchend', (e) => {
+    if (!isInNoZoomView()) return;
     const now = Date.now();
     if (now - lastTouchEnd <= 300) {
         e.preventDefault();

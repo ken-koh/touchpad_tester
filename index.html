@@ -6,12 +6,16 @@
     <title>Touchpad Testing Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        /* Prevent browser zoom on touch devices */
-        html, body {
-            touch-action: pan-x pan-y;
-        }
-        #debug-view {
+        /* Prevent browser zoom only on specific views */
+        #debug-view,
+        #graph-view,
+        #shapes-view {
             touch-action: none;
+        }
+        /* Allow zooming on browse and maps views */
+        #browse-view,
+        #maps-view {
+            touch-action: auto;
         }
     </style>
 </head>
