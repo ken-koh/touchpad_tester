@@ -726,10 +726,16 @@
             </div>
             <div class="shapes-header-stats">
                 <div class="header-stat-group">
-                    <span class="header-stat-label">Offset:</span>
+                    <span class="header-stat-label">Current:</span>
                     <span class="header-stat">X: <span id="header-offset-x" class="header-stat-value">0</span></span>
                     <span class="header-stat">Y: <span id="header-offset-y" class="header-stat-value">0</span></span>
                     <span class="header-stat">Dist: <span id="header-offset-dist" class="header-stat-value">0</span></span>
+                </div>
+                <div class="header-stat-group">
+                    <span class="header-stat-label">Avg:</span>
+                    <span class="header-stat">X: <span id="header-avg-x" class="header-stat-value">0</span></span>
+                    <span class="header-stat">Y: <span id="header-avg-y" class="header-stat-value">0</span></span>
+                    <span class="header-stat">Dist: <span id="header-avg-dist" class="header-stat-value">0</span></span>
                 </div>
                 <div class="header-stat-group">
                     <span class="header-stat-label">Status:</span>
@@ -779,24 +785,42 @@
                 <!-- Results Panel (shown after completion) -->
                 <div id="shape-results" class="results-panel hidden">
                     <h3>Results</h3>
-                    <div class="results-grid">
-                        <div class="result-item">
-                            <span class="result-label">Avg Offset</span>
-                            <span id="result-avg-offset" class="result-value">0</span>
+                    <div class="results-grid-detailed">
+                        <div class="results-row">
+                            <span class="result-header"></span>
+                            <span class="result-header">X</span>
+                            <span class="result-header">Y</span>
+                            <span class="result-header">Combined</span>
                         </div>
-                        <div class="result-item">
-                            <span class="result-label">Max Offset</span>
-                            <span id="result-max-offset" class="result-value">0</span>
+                        <div class="results-row">
+                            <span class="result-label">Avg</span>
+                            <span id="result-avg-x" class="result-value">0</span>
+                            <span id="result-avg-y" class="result-value">0</span>
+                            <span id="result-avg-combined" class="result-value">0</span>
                         </div>
-                        <div class="result-item">
+                        <div class="results-row">
+                            <span class="result-label">Max</span>
+                            <span id="result-max-x" class="result-value">0</span>
+                            <span id="result-max-y" class="result-value">0</span>
+                            <span id="result-max-combined" class="result-value">0</span>
+                        </div>
+                        <div class="results-row accuracy-row">
                             <span class="result-label">Accuracy</span>
-                            <span id="result-accuracy" class="result-value">0%</span>
+                            <span id="result-accuracy" class="result-value accuracy-value" colspan="3">0%</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Reset Button -->
                 <button id="reset-shape-test" class="reset-shape-btn" onclick="console.log('onclick fired'); resetShapeTest();">Reset Test</button>
+
+                <!-- History Panel -->
+                <div class="history-panel">
+                    <h3>History (Last 10)</h3>
+                    <div id="shape-history-list" class="history-list">
+                        <div class="history-empty">No attempts yet</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Canvas Area -->

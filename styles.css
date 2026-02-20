@@ -1665,22 +1665,24 @@ h2 {
 
 /* Shape Buttons */
 .shape-buttons {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
 }
 
 .shape-btn {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 8px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     color: #aaa;
     cursor: pointer;
     transition: all 0.2s ease;
+    font-size: 0.8rem;
 }
 
 .shape-btn:hover {
@@ -1827,6 +1829,34 @@ h2 {
     gap: 10px;
 }
 
+.results-grid-detailed {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.results-row {
+    display: grid;
+    grid-template-columns: 50px 1fr 1fr 1fr;
+    gap: 8px;
+    align-items: center;
+}
+
+.results-row.accuracy-row {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    grid-template-columns: 50px 1fr;
+}
+
+.result-header {
+    font-size: 0.7rem;
+    color: #888;
+    text-transform: uppercase;
+    text-align: center;
+    font-weight: bold;
+}
+
 .result-item {
     background: rgba(0, 0, 0, 0.3);
     padding: 10px;
@@ -1835,19 +1865,25 @@ h2 {
 }
 
 .result-label {
-    display: block;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: #888;
-    margin-bottom: 4px;
     text-transform: uppercase;
 }
 
 .result-value {
-    display: block;
-    font-size: 1.1rem;
+    font-size: 0.85rem;
     font-weight: bold;
     font-family: 'Consolas', monospace;
+    color: #4fc3f7;
+    text-align: center;
+    padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.accuracy-value {
     color: #81c784;
+    font-size: 1rem;
 }
 
 /* Reset Button */
@@ -1872,6 +1908,111 @@ h2 {
 .reset-shape-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(124, 77, 255, 0.4);
+}
+
+/* History Panel */
+.history-panel {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 300px;
+}
+
+.history-panel h3 {
+    font-size: 0.95rem;
+    color: #a0a0ff;
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(160, 160, 255, 0.3);
+    flex-shrink: 0;
+}
+
+.history-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.history-empty {
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+    font-size: 0.85rem;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.history-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(124, 77, 255, 0.3);
+}
+
+.history-item.selected {
+    background: rgba(124, 77, 255, 0.2);
+    border-color: #7c4dff;
+}
+
+.history-shape-icon {
+    font-size: 1.2rem;
+    width: 28px;
+    text-align: center;
+}
+
+.history-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.history-shape-name {
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
+.history-accuracy {
+    font-size: 0.9rem;
+    font-weight: bold;
+    font-family: 'Consolas', monospace;
+}
+
+.history-accuracy.excellent {
+    color: #81c784;
+}
+
+.history-accuracy.good {
+    color: #4fc3f7;
+}
+
+.history-accuracy.fair {
+    color: #ff9800;
+}
+
+.history-accuracy.poor {
+    color: #f44336;
+}
+
+.history-time {
+    font-size: 0.7rem;
+    color: #666;
 }
 
 /* Canvas Area */

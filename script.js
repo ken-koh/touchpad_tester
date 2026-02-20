@@ -2164,6 +2164,7 @@ tabBtns.forEach(btn => {
         if (tab === 'shapes') {
             setTimeout(() => {
                 initShapesCanvas();
+                drawShapesCanvas();
             }, 50);
         }
     });
@@ -2198,9 +2199,14 @@ let shapeTestActive = false;
 let shapeTestCompleted = false;
 let shapeStartPoint = { x: 0, y: 0 };
 let shapeCenter = { x: 0, y: 0 };
+
+// History State
+const MAX_SHAPE_HISTORY_ITEMS = 10;
+let shapeHistory = []; // Array of { shape, userPath, expectedPath, avgOffset, maxOffset, accuracy, timestamp }
+let selectedHistoryIndex = -1; // -1 means showing current test, >= 0 means showing history item
 let userPath = [];
 let expectedPath = [];
-let offsetHistory = [];
+let offsetHistory = []; // Array of { x, y, distance } objects
 let currentPathIndex = 0;
 let maxPathIndexReached = 0; // Track the furthest point reached (to prevent jumping back to start)
 let hasPassedHalfway = false; // Track if user has gone past halfway point
@@ -2343,6 +2349,101 @@ function calculateOffset(userX, userY) {
     };
 }
 
+// Draw valid start region indicator
+function drawValidStartRegion(ctx) {
+    const bounds = getValidStartBounds();
+    const width = bounds.maxX - bounds.minX;
+    const height = bounds.maxY - bounds.minY;
+
+    // Draw the invalid (grayed out) regions
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+
+    // Top region
+    ctx.fillRect(0, 0, shapesCanvas.width, bounds.minY);
+    // Bottom region
+    ctx.fillRect(0, bounds.maxY, shapesCanvas.width, shapesCanvas.height - bounds.maxY);
+    // Left region
+    ctx.fillRect(0, bounds.minY, bounds.minX, height);
+    // Right region
+    ctx.fillRect(bounds.maxX, bounds.minY, shapesCanvas.width - bounds.maxX, height);
+
+    // Draw valid region border
+    ctx.strokeStyle = 'rgba(76, 175, 80, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeRect(bounds.minX, bounds.minY, width, height);
+    ctx.setLineDash([]);
+}
+
+// Draw a preview of the current shape
+function drawShapePreview(ctx, centerX, centerY) {
+    ctx.strokeStyle = 'rgba(100, 100, 255, 0.2)';
+    ctx.lineWidth = 15;
+    ctx.lineCap = 'round';
+    ctx.setLineDash([]);
+
+    const halfSize = SHAPE_SIZE / 2;
+
+    switch (currentShape) {
+        case 'circle':
+            ctx.beginPath();
+            ctx.arc(centerX - halfSize, centerY, halfSize, 0, Math.PI * 2);
+            ctx.stroke();
+            // Draw start indicator
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.5)';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+        case 'horizontal':
+            ctx.beginPath();
+            ctx.moveTo(centerX - halfSize, centerY);
+            ctx.lineTo(centerX + halfSize, centerY);
+            ctx.stroke();
+            // Start dot
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.5)';
+            ctx.beginPath();
+            ctx.arc(centerX - halfSize, centerY, 8, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+        case 'vertical':
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - halfSize);
+            ctx.lineTo(centerX, centerY + halfSize);
+            ctx.stroke();
+            // Start dot
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.5)';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY - halfSize, 8, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+        case 'diagonal-up':
+            // Diagonal up (↗): start bottom-left, end top-right
+            ctx.beginPath();
+            ctx.moveTo(centerX - halfSize, centerY + halfSize);
+            ctx.lineTo(centerX + halfSize, centerY - halfSize);
+            ctx.stroke();
+            // Start dot
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.5)';
+            ctx.beginPath();
+            ctx.arc(centerX - halfSize, centerY + halfSize, 8, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+        case 'diagonal-down':
+            // Diagonal down (↘): start top-left, end bottom-right
+            ctx.beginPath();
+            ctx.moveTo(centerX - halfSize, centerY - halfSize);
+            ctx.lineTo(centerX + halfSize, centerY + halfSize);
+            ctx.stroke();
+            // Start dot
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.5)';
+            ctx.beginPath();
+            ctx.arc(centerX - halfSize, centerY - halfSize, 8, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+    }
+}
+
 // Draw the shapes canvas
 function drawShapesCanvas() {
     if (!shapesCtx || !shapesCanvas) return;
@@ -2354,6 +2455,11 @@ function drawShapesCanvas() {
     // Clear canvas with white background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
+
+    // Draw valid start region when no test is active
+    if (!shapeTestActive && !shapeTestCompleted) {
+        drawValidStartRegion(ctx);
+    }
 
     // Draw guide path (semi-transparent) - show during tracing AND after completion
     if ((shapeTestActive || shapeTestCompleted) && expectedPath.length > 0) {
@@ -2433,6 +2539,11 @@ function drawShapesCanvas() {
 
 // Update offset display (both sidebar and header)
 function updateOffsetDisplay(offsetX, offsetY, distance) {
+    // Determine which components are relevant based on shape
+    const showX = currentShape !== 'horizontal';
+    const showY = currentShape !== 'vertical';
+    const showDist = currentShape !== 'horizontal' && currentShape !== 'vertical';
+
     // Update sidebar elements
     if (shapeOffsetX) {
         shapeOffsetX.textContent = Math.round(offsetX);
@@ -2447,22 +2558,67 @@ function updateOffsetDisplay(offsetX, offsetY, distance) {
         shapeOffsetDist.className = 'offset-value' + (distance > 20 ? ' warning' : '') + (distance > 50 ? ' error' : '');
     }
 
-    // Update header elements
+    // Update header current offset elements
     const headerOffsetX = document.getElementById('header-offset-x');
     const headerOffsetY = document.getElementById('header-offset-y');
     const headerOffsetDist = document.getElementById('header-offset-dist');
 
     if (headerOffsetX) {
-        headerOffsetX.textContent = Math.round(offsetX);
-        headerOffsetX.className = 'header-stat-value' + (Math.abs(offsetX) > 20 ? ' warning' : '') + (Math.abs(offsetX) > 50 ? ' error' : '');
+        headerOffsetX.textContent = showX ? Math.round(offsetX) : '-';
+        headerOffsetX.className = 'header-stat-value' + (showX && Math.abs(offsetX) > 20 ? ' warning' : '') + (showX && Math.abs(offsetX) > 50 ? ' error' : '');
+        headerOffsetX.style.opacity = showX ? '1' : '0.3';
     }
     if (headerOffsetY) {
-        headerOffsetY.textContent = Math.round(offsetY);
-        headerOffsetY.className = 'header-stat-value' + (Math.abs(offsetY) > 20 ? ' warning' : '') + (Math.abs(offsetY) > 50 ? ' error' : '');
+        headerOffsetY.textContent = showY ? Math.round(offsetY) : '-';
+        headerOffsetY.className = 'header-stat-value' + (showY && Math.abs(offsetY) > 20 ? ' warning' : '') + (showY && Math.abs(offsetY) > 50 ? ' error' : '');
+        headerOffsetY.style.opacity = showY ? '1' : '0.3';
     }
     if (headerOffsetDist) {
-        headerOffsetDist.textContent = Math.round(distance);
-        headerOffsetDist.className = 'header-stat-value' + (distance > 20 ? ' warning' : '') + (distance > 50 ? ' error' : '');
+        headerOffsetDist.textContent = showDist ? Math.round(distance) : '-';
+        headerOffsetDist.className = 'header-stat-value' + (showDist && distance > 20 ? ' warning' : '') + (showDist && distance > 50 ? ' error' : '');
+        headerOffsetDist.style.opacity = showDist ? '1' : '0.3';
+    }
+
+    // Update header running average
+    updateRunningAverage();
+}
+
+// Update running average display
+function updateRunningAverage() {
+    const len = offsetHistory.length;
+    if (len === 0) {
+        return;
+    }
+
+    // Calculate running averages
+    const avgX = offsetHistory.reduce((sum, o) => sum + Math.abs(o.x), 0) / len;
+    const avgY = offsetHistory.reduce((sum, o) => sum + Math.abs(o.y), 0) / len;
+    const avgDist = offsetHistory.reduce((sum, o) => sum + o.distance, 0) / len;
+
+    // Determine which components are relevant based on shape
+    const showX = currentShape !== 'horizontal';
+    const showY = currentShape !== 'vertical';
+    const showDist = currentShape !== 'horizontal' && currentShape !== 'vertical';
+
+    // Update header average elements
+    const headerAvgX = document.getElementById('header-avg-x');
+    const headerAvgY = document.getElementById('header-avg-y');
+    const headerAvgDist = document.getElementById('header-avg-dist');
+
+    if (headerAvgX) {
+        headerAvgX.textContent = showX ? avgX.toFixed(1) : '-';
+        headerAvgX.className = 'header-stat-value' + (showX && avgX > 20 ? ' warning' : '') + (showX && avgX > 50 ? ' error' : '');
+        headerAvgX.style.opacity = showX ? '1' : '0.3';
+    }
+    if (headerAvgY) {
+        headerAvgY.textContent = showY ? avgY.toFixed(1) : '-';
+        headerAvgY.className = 'header-stat-value' + (showY && avgY > 20 ? ' warning' : '') + (showY && avgY > 50 ? ' error' : '');
+        headerAvgY.style.opacity = showY ? '1' : '0.3';
+    }
+    if (headerAvgDist) {
+        headerAvgDist.textContent = showDist ? avgDist.toFixed(1) : '-';
+        headerAvgDist.className = 'header-stat-value' + (showDist && avgDist > 20 ? ' warning' : '') + (showDist && avgDist > 50 ? ' error' : '');
+        headerAvgDist.style.opacity = showDist ? '1' : '0.3';
     }
 }
 
@@ -2499,27 +2655,323 @@ function updateTestState(state, label) {
 }
 
 // Update results (both sidebar and header)
-function updateResults(avgOffset, maxOffset, accuracy) {
-    // Update sidebar
-    if (shapeAvgOffset) shapeAvgOffset.textContent = avgOffset.toFixed(1);
-    if (shapeMaxOffset) shapeMaxOffset.textContent = maxOffset.toFixed(1);
-    if (shapeAccuracy) shapeAccuracy.textContent = accuracy.toFixed(0) + '%';
+function updateResults(results) {
+    const shape = results.shape || currentShape;
+
+    // Determine which components to show based on shape
+    // Horizontal: only Y matters
+    // Vertical: only X matters
+    // Others: show all
+    const showX = shape !== 'horizontal';
+    const showY = shape !== 'vertical';
+    const showCombined = shape !== 'horizontal' && shape !== 'vertical';
+
+    // Update sidebar with detailed X, Y breakdown
+    const avgXEl = document.getElementById('result-avg-x');
+    const avgYEl = document.getElementById('result-avg-y');
+    const avgCombEl = document.getElementById('result-avg-combined');
+    const maxXEl = document.getElementById('result-max-x');
+    const maxYEl = document.getElementById('result-max-y');
+    const maxCombEl = document.getElementById('result-max-combined');
+
+    if (avgXEl) {
+        avgXEl.textContent = showX ? results.avgX.toFixed(1) + 'px' : '-';
+        avgXEl.style.opacity = showX ? '1' : '0.3';
+    }
+    if (avgYEl) {
+        avgYEl.textContent = showY ? results.avgY.toFixed(1) + 'px' : '-';
+        avgYEl.style.opacity = showY ? '1' : '0.3';
+    }
+    if (avgCombEl) {
+        avgCombEl.textContent = showCombined ? results.avgCombined.toFixed(1) + 'px' : '-';
+        avgCombEl.style.opacity = showCombined ? '1' : '0.3';
+    }
+    if (maxXEl) {
+        maxXEl.textContent = showX ? results.maxX.toFixed(1) + 'px' : '-';
+        maxXEl.style.opacity = showX ? '1' : '0.3';
+    }
+    if (maxYEl) {
+        maxYEl.textContent = showY ? results.maxY.toFixed(1) + 'px' : '-';
+        maxYEl.style.opacity = showY ? '1' : '0.3';
+    }
+    if (maxCombEl) {
+        maxCombEl.textContent = showCombined ? results.maxCombined.toFixed(1) + 'px' : '-';
+        maxCombEl.style.opacity = showCombined ? '1' : '0.3';
+    }
+    if (resultAccuracy) resultAccuracy.textContent = results.accuracy.toFixed(0) + '%';
     if (shapeResults) shapeResults.classList.remove('hidden');
 
-    // Update header
+    // Update header - show relevant average
     const headerResults = document.getElementById('header-results');
     const headerAvg = document.getElementById('header-result-avg');
     const headerMax = document.getElementById('header-result-max');
     const headerAcc = document.getElementById('header-result-acc');
 
-    if (headerAvg) headerAvg.textContent = avgOffset.toFixed(1);
-    if (headerMax) headerMax.textContent = maxOffset.toFixed(1);
-    if (headerAcc) headerAcc.textContent = accuracy.toFixed(0) + '%';
+    // Use relevant values for header display
+    const relevantAvg = results.relevantAvg !== undefined ? results.relevantAvg : results.avgCombined;
+    const relevantMax = results.relevantMax !== undefined ? results.relevantMax : results.maxCombined;
+
+    if (headerAvg) headerAvg.textContent = relevantAvg.toFixed(1) + 'px';
+    if (headerMax) headerMax.textContent = relevantMax.toFixed(1) + 'px';
+    if (headerAcc) headerAcc.textContent = results.accuracy.toFixed(0) + '%';
     if (headerResults) headerResults.classList.remove('hidden');
+}
+
+// Save attempt to history
+function saveToHistory(results) {
+    const attempt = {
+        shape: currentShape,
+        userPath: [...userPath],
+        expectedPath: [...expectedPath],
+        shapeCenter: shapeCenter ? { ...shapeCenter } : null,
+        results: results,
+        timestamp: Date.now()
+    };
+
+    // Add to beginning of history
+    shapeHistory.unshift(attempt);
+
+    // Keep only last MAX_SHAPE_HISTORY_ITEMS
+    if (shapeHistory.length > MAX_SHAPE_HISTORY_ITEMS) {
+        shapeHistory.pop();
+    }
+
+    // Render history list
+    renderHistoryList();
+}
+
+// Get shape icon
+function getShapeIcon(shape) {
+    const icons = {
+        'circle': '⭕',
+        'horizontal': '↔️',
+        'vertical': '↕️',
+        'diagonal-up': '↗️',
+        'diagonal-down': '↘️'
+    };
+    return icons[shape] || '📐';
+}
+
+// Get shape display name
+function getShapeDisplayName(shape) {
+    const names = {
+        'circle': 'Circle',
+        'horizontal': 'Horizontal',
+        'vertical': 'Vertical',
+        'diagonal-up': 'Diagonal ↗',
+        'diagonal-down': 'Diagonal ↘'
+    };
+    return names[shape] || shape;
+}
+
+// Get accuracy class
+function getAccuracyClass(accuracy) {
+    if (accuracy >= 90) return 'excellent';
+    if (accuracy >= 70) return 'good';
+    if (accuracy >= 50) return 'fair';
+    return 'poor';
+}
+
+// Format time ago
+function formatTimeAgo(timestamp) {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+}
+
+// Render history list
+function renderHistoryList() {
+    const historyList = document.getElementById('shape-history-list');
+    if (!historyList) return;
+
+    if (shapeHistory.length === 0) {
+        historyList.innerHTML = '<div class="history-empty">No attempts yet</div>';
+        return;
+    }
+
+    historyList.innerHTML = shapeHistory.map((item, index) => `
+        <div class="history-item ${selectedHistoryIndex === index ? 'selected' : ''}" data-index="${index}">
+            <span class="history-shape-icon">${getShapeIcon(item.shape)}</span>
+            <div class="history-info">
+                <span class="history-shape-name">${getShapeDisplayName(item.shape)}</span>
+                <span class="history-accuracy ${getAccuracyClass(item.results.accuracy)}">${item.results.accuracy.toFixed(0)}% accuracy</span>
+            </div>
+            <span class="history-time">${formatTimeAgo(item.timestamp)}</span>
+        </div>
+    `).join('');
+
+    // Add click listeners
+    historyList.querySelectorAll('.history-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const index = parseInt(item.dataset.index);
+            selectHistoryItem(index);
+        });
+    });
+}
+
+// Select history item to display
+function selectHistoryItem(index) {
+    selectedHistoryIndex = index;
+    renderHistoryList();
+
+    const item = shapeHistory[index];
+    if (!item) return;
+
+    // Update results using the new format
+    updateResults(item.results);
+    updateTestState('completed', 'Viewing');
+
+    // Draw the historical paths
+    drawHistoricalPaths(item);
+}
+
+// Draw historical paths on canvas
+function drawHistoricalPaths(historyItem) {
+    if (!shapesCanvas || !shapesCtx) return;
+
+    const ctx = shapesCtx;
+    ctx.clearRect(0, 0, shapesCanvas.width, shapesCanvas.height);
+
+    const expPath = historyItem.expectedPath;
+    const usrPath = historyItem.userPath;
+
+    if (expPath.length < 2) return;
+
+    // Draw expected path (guide)
+    ctx.strokeStyle = 'rgba(100, 100, 255, 0.4)';
+    ctx.lineWidth = 20;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(expPath[0].x, expPath[0].y);
+    for (let i = 1; i < expPath.length; i++) {
+        ctx.lineTo(expPath[i].x, expPath[i].y);
+    }
+    ctx.stroke();
+
+    // For circle, draw full circle guide
+    if (historyItem.shape === 'circle' && historyItem.shapeCenter) {
+        ctx.strokeStyle = 'rgba(100, 100, 255, 0.3)';
+        ctx.lineWidth = 20;
+        ctx.beginPath();
+        ctx.arc(historyItem.shapeCenter.x, historyItem.shapeCenter.y, SHAPE_SIZE / 2, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Draw start point
+    ctx.fillStyle = 'rgba(76, 175, 80, 0.8)';
+    ctx.beginPath();
+    ctx.arc(expPath[0].x, expPath[0].y, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('S', expPath[0].x, expPath[0].y);
+
+    // Draw end point
+    const endPoint = expPath[expPath.length - 1];
+    ctx.fillStyle = 'rgba(244, 67, 54, 0.8)';
+    ctx.beginPath();
+    ctx.arc(endPoint.x, endPoint.y, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText('E', endPoint.x, endPoint.y);
+
+    // Draw user path
+    if (usrPath.length >= 2) {
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(usrPath[0].x, usrPath[0].y);
+        for (let i = 1; i < usrPath.length; i++) {
+            ctx.lineTo(usrPath[i].x, usrPath[i].y);
+        }
+        ctx.stroke();
+    }
+}
+
+// Calculate valid start position bounds for each shape
+function getValidStartBounds() {
+    if (!shapesCanvas) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
+    const canvasWidth = shapesCanvas.width;
+    const canvasHeight = shapesCanvas.height;
+    const padding = 20; // Extra padding from edges
+    const halfSize = SHAPE_SIZE / 2;
+    const lineWidth = 10; // Account for stroke width
+
+    let minX, minY, maxX, maxY;
+
+    switch (currentShape) {
+        case 'circle':
+            // Circle: center is to the LEFT of start point by halfSize
+            // So the circle extends from (startX - SHAPE_SIZE) to startX horizontally
+            // and from (startY - halfSize) to (startY + halfSize) vertically
+            minX = SHAPE_SIZE + padding + lineWidth; // Full diameter to the left of start
+            maxX = canvasWidth - padding - lineWidth;
+            minY = halfSize + padding + lineWidth;
+            maxY = canvasHeight - halfSize - padding - lineWidth;
+            break;
+        case 'horizontal':
+            // Horizontal: line extends to the RIGHT from start by SHAPE_SIZE
+            minX = padding + lineWidth;
+            maxX = canvasWidth - SHAPE_SIZE - padding - lineWidth;
+            minY = padding + lineWidth;
+            maxY = canvasHeight - padding - lineWidth;
+            break;
+        case 'vertical':
+            // Vertical: line extends DOWN from start by SHAPE_SIZE
+            minX = padding + lineWidth;
+            maxX = canvasWidth - padding - lineWidth;
+            minY = padding + lineWidth;
+            maxY = canvasHeight - SHAPE_SIZE - padding - lineWidth;
+            break;
+        case 'diagonal-up':
+            // Diagonal up (↗): line goes RIGHT by SHAPE_SIZE and UP by SHAPE_SIZE
+            // Start is bottom-left, end is top-right
+            minX = padding + lineWidth;
+            maxX = canvasWidth - SHAPE_SIZE - padding - lineWidth;
+            minY = SHAPE_SIZE + padding + lineWidth; // Need room above for the line going up
+            maxY = canvasHeight - padding - lineWidth;
+            break;
+        case 'diagonal-down':
+            // Diagonal down (↘): line goes RIGHT by SHAPE_SIZE and DOWN by SHAPE_SIZE
+            // Start is top-left, end is bottom-right
+            minX = padding + lineWidth;
+            maxX = canvasWidth - SHAPE_SIZE - padding - lineWidth;
+            minY = padding + lineWidth;
+            maxY = canvasHeight - SHAPE_SIZE - padding - lineWidth; // Need room below
+            break;
+        default:
+            minX = padding;
+            maxX = canvasWidth - padding;
+            minY = padding;
+            maxY = canvasHeight - padding;
+    }
+
+    return { minX, minY, maxX, maxY };
+}
+
+// Clamp start position to valid bounds
+function clampStartPosition(x, y) {
+    const bounds = getValidStartBounds();
+    return {
+        x: Math.max(bounds.minX, Math.min(bounds.maxX, x)),
+        y: Math.max(bounds.minY, Math.min(bounds.maxY, y))
+    };
 }
 
 // Start shape test
 function startShapeTest(startX, startY) {
+    // Clamp start position to ensure shape stays within canvas
+    const clamped = clampStartPosition(startX, startY);
+    startX = clamped.x;
+    startY = clamped.y;
+
     shapeTestActive = true;
     shapeTestCompleted = false;
     shapeStartPoint = { x: startX, y: startY };
@@ -2557,7 +3009,7 @@ function updateShapeTest(x, y) {
 
     // Calculate offset from expected path
     const offset = calculateOffset(x, y);
-    offsetHistory.push(offset.distance);
+    offsetHistory.push({ x: offset.offsetX, y: offset.offsetY, distance: offset.distance });
 
     // Update current path index - only move forward, don't jump backwards
     // This prevents the circle from completing immediately by finding the end point
@@ -2578,26 +3030,27 @@ function updateShapeTest(x, y) {
     const progress = maxPathIndexReached / (expectedPath.length - 1);
 
     if (currentShape === 'circle') {
-        // For circle: must have passed halfway AND be near the start point
-        if (hasPassedHalfway && progress >= 0.85) {
-            const distToStart = Math.sqrt(
-                Math.pow(x - expectedPath[0].x, 2) +
-                Math.pow(y - expectedPath[0].y, 2)
+        // For circle: must have passed halfway AND be near the end point (330° arc end)
+        if (hasPassedHalfway && progress >= 0.90) {
+            const endPoint = expectedPath[expectedPath.length - 1];
+            const distToEnd = Math.sqrt(
+                Math.pow(x - endPoint.x, 2) +
+                Math.pow(y - endPoint.y, 2)
             );
-            if (distToStart < 30) {
+            if (distToEnd < 15) {
                 completeShapeTest();
                 return;
             }
         }
     } else {
         // For lines, complete when we reach near the end
-        if (progress >= 0.90) {
+        if (progress >= 0.95) {
             const endPoint = expectedPath[expectedPath.length - 1];
             const distToEnd = Math.sqrt(
                 Math.pow(x - endPoint.x, 2) +
                 Math.pow(y - endPoint.y, 2)
             );
-            if (distToEnd < 30) {
+            if (distToEnd < 15) {
                 completeShapeTest();
                 return;
             }
@@ -2613,7 +3066,7 @@ function updateProgress() {
 
     const progress = Math.min(100, Math.round((maxPathIndexReached / (expectedPath.length - 1)) * 100));
     shapeProgress.textContent = progress + '%';
-    
+
     // Update header progress
     const headerProgress = document.getElementById('header-progress');
     if (headerProgress) {
@@ -2626,27 +3079,79 @@ function completeShapeTest() {
     shapeTestActive = false;
     shapeTestCompleted = true;
 
-    // Calculate results
-    const avgOffset = offsetHistory.length > 0
-        ? offsetHistory.reduce((a, b) => a + b, 0) / offsetHistory.length
+    // Calculate results - separate X, Y, and combined
+    const len = offsetHistory.length;
+
+    // X offset statistics
+    const avgOffsetX = len > 0
+        ? offsetHistory.reduce((sum, o) => sum + Math.abs(o.x), 0) / len
         : 0;
-    const maxOffset = offsetHistory.length > 0
-        ? Math.max(...offsetHistory)
+    const maxOffsetX = len > 0
+        ? Math.max(...offsetHistory.map(o => Math.abs(o.x)))
         : 0;
 
+    // Y offset statistics
+    const avgOffsetY = len > 0
+        ? offsetHistory.reduce((sum, o) => sum + Math.abs(o.y), 0) / len
+        : 0;
+    const maxOffsetY = len > 0
+        ? Math.max(...offsetHistory.map(o => Math.abs(o.y)))
+        : 0;
+
+    // Combined (distance) statistics
+    const avgOffset = len > 0
+        ? offsetHistory.reduce((sum, o) => sum + o.distance, 0) / len
+        : 0;
+    const maxOffset = len > 0
+        ? Math.max(...offsetHistory.map(o => o.distance))
+        : 0;
+
+    // Determine which offset to use for accuracy based on shape type
+    // Horizontal line: only Y matters (deviation from straight horizontal)
+    // Vertical line: only X matters (deviation from straight vertical)
+    // Others: use combined distance
+    let relevantAvg, relevantMax;
+    if (currentShape === 'horizontal') {
+        relevantAvg = avgOffsetY;
+        relevantMax = maxOffsetY;
+    } else if (currentShape === 'vertical') {
+        relevantAvg = avgOffsetX;
+        relevantMax = maxOffsetX;
+    } else {
+        relevantAvg = avgOffset;
+        relevantMax = maxOffset;
+    }
+
     // Calculate accuracy (100% = perfect, decreases with offset)
-    const accuracy = Math.max(0, 100 - (avgOffset * 2));
+    const accuracy = Math.max(0, 100 - (relevantAvg * 2));
+
+    // Create results object with shape-specific relevance flags
+    const results = {
+        shape: currentShape,
+        avgX: avgOffsetX,
+        maxX: maxOffsetX,
+        avgY: avgOffsetY,
+        maxY: maxOffsetY,
+        avgCombined: avgOffset,
+        maxCombined: maxOffset,
+        relevantAvg: relevantAvg,
+        relevantMax: relevantMax,
+        accuracy: accuracy
+    };
+
+    // Save to history
+    saveToHistory(results);
 
     // Update UI - use helper function for header
     updateTestState('completed', 'Complete');
-    
+
     if (shapeInstruction) {
-        shapeInstruction.textContent = 'Test complete! Click Reset to try again';
+        shapeInstruction.textContent = 'Test complete! Click to start new test or press Reset';
     }
     if (shapeProgress) {
         shapeProgress.textContent = '100%';
     }
-    
+
     // Update header progress
     const headerProgress = document.getElementById('header-progress');
     if (headerProgress) {
@@ -2654,7 +3159,7 @@ function completeShapeTest() {
     }
 
     // Show results - use helper function
-    updateResults(avgOffset, maxOffset, accuracy);
+    updateResults(results);
 
     // Keep user path visible (don't clear it)
     drawShapesCanvas();
@@ -2671,6 +3176,10 @@ function resetShapeTest() {
     maxPathIndexReached = 0;
     hasPassedHalfway = false;
 
+    // Clear history selection
+    selectedHistoryIndex = -1;
+    renderHistoryList();
+
     // Reset sidebar UI elements
     const instructionEl = document.getElementById('shape-instruction');
     const resultsEl = document.getElementById('shape-results');
@@ -2684,17 +3193,17 @@ function resetShapeTest() {
 
     // Reset header UI elements
     updateTestState('idle', 'Ready');
-    
+
     const headerProgress = document.getElementById('header-progress');
     if (headerProgress) {
         headerProgress.textContent = '0%';
     }
-    
+
     const headerResults = document.getElementById('header-results');
     if (headerResults) {
         headerResults.classList.add('hidden');
     }
-    
+
     // Reset header offset display
     const headerOffsetX = document.getElementById('header-offset-x');
     const headerOffsetY = document.getElementById('header-offset-y');
@@ -2703,10 +3212,16 @@ function resetShapeTest() {
     if (headerOffsetY) headerOffsetY.textContent = '0';
     if (headerOffsetDist) headerOffsetDist.textContent = '0';
 
-    // Clear and redraw canvas
-    if (shapesCanvas && shapesCtx) {
-        shapesCtx.clearRect(0, 0, shapesCanvas.width, shapesCanvas.height);
-    }
+    // Reset header running average display
+    const headerAvgX = document.getElementById('header-avg-x');
+    const headerAvgY = document.getElementById('header-avg-y');
+    const headerAvgDist = document.getElementById('header-avg-dist');
+    if (headerAvgX) headerAvgX.textContent = '0';
+    if (headerAvgY) headerAvgY.textContent = '0';
+    if (headerAvgDist) headerAvgDist.textContent = '0';
+
+    // Redraw canvas with valid start region
+    drawShapesCanvas();
 }
 
 // Expose resetShapeTest globally for inline onclick
@@ -2716,11 +3231,17 @@ window.resetShapeTest = resetShapeTest;
 if (shapesCanvas) {
     shapesCanvas.addEventListener('mousedown', (e) => {
         if (!isShapesModeActive()) return;
-        if (shapeTestCompleted) return; // Must reset first
 
         const rect = shapesCanvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (shapesCanvas.width / rect.width);
         const y = (e.clientY - rect.top) * (shapesCanvas.height / rect.height);
+
+        // If test is completed, reset and start a new one
+        if (shapeTestCompleted) {
+            resetShapeTest();
+            startShapeTest(x, y);
+            return;
+        }
 
         if (!shapeTestActive) {
             startShapeTest(x, y);
@@ -2741,13 +3262,19 @@ if (shapesCanvas) {
     // Touch support
     shapesCanvas.addEventListener('touchstart', (e) => {
         if (!isShapesModeActive()) return;
-        if (shapeTestCompleted) return;
         e.preventDefault();
 
         const rect = shapesCanvas.getBoundingClientRect();
         const touch = e.touches[0];
         const x = (touch.clientX - rect.left) * (shapesCanvas.width / rect.width);
         const y = (touch.clientY - rect.top) * (shapesCanvas.height / rect.height);
+
+        // If test is completed, reset and start a new one
+        if (shapeTestCompleted) {
+            resetShapeTest();
+            startShapeTest(x, y);
+            return;
+        }
 
         if (!shapeTestActive) {
             startShapeTest(x, y);
