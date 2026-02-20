@@ -594,6 +594,11 @@ h2 {
     background: rgba(255, 152, 0, 0.2);
 }
 
+.state-value.drag {
+    color: #ffb74d;
+    background: rgba(255, 183, 77, 0.2);
+}
+
 .bar-stats {
     display: flex;
     gap: 20px;

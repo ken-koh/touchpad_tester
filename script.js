@@ -92,6 +92,10 @@ const ZOOM_SENSITIVITY = 0.01;
 const ARTICLE_MIN_ZOOM = 0.25;
 const ARTICLE_MAX_ZOOM = 5.0;
 
+// Dragging state (mouse button held + movement)
+let isDragging = false;
+let isMouseButtonDown = false;
+
 // Scroll/Zoom event detection state
 let isScrolling = false;
 let isZooming = false;
@@ -267,8 +271,8 @@ function processAlternativeScroll(deltaX, deltaY, source) {
         lastScrollDirX = currentDirX;
         lastScrollDirY = currentDirY;
 
-        if (isBrowseModeActive()) {
-            setCurrentState('scrolling');
+        if (isBrowseModeActive() && !isDragging) {
+            setCurrentState('scroll');
             addLogEntry(`scroll start (${source}) dir: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
         }
     } else {
@@ -352,7 +356,7 @@ function processAlternativeScroll(deltaX, deltaY, source) {
     scrollTimeout = setTimeout(() => {
         if (isScrolling) {
             isScrolling = false;
-            if (isBrowseModeActive()) {
+            if (isBrowseModeActive() && !isDragging) {
                 setCurrentState('idle');
                 addLogEntry(`scroll end (${source})`, 'scroll');
             }
@@ -1262,6 +1266,11 @@ let lastClickInfo = '-';
 const STATE_IDLE_DELAY = 200;
 
 function setCurrentState(state) {
+    // If dragging, don't allow scroll to override the state
+    if (isDragging && state === 'scroll') {
+        return;
+    }
+
     currentState = state;
     currentStateEl.textContent = state;
     currentStateEl.className = 'state-value ' + state;
@@ -1271,10 +1280,13 @@ function setCurrentState(state) {
         clearTimeout(stateTimeout);
     }
 
-    // Set timeout to return to idle (except for idle state)
-    if (state !== 'idle') {
+    // Set timeout to return to idle (except for idle and dragging states)
+    if (state !== 'idle' && state !== 'drag') {
         stateTimeout = setTimeout(() => {
-            setCurrentState('idle');
+            // Don't return to idle if we're still dragging
+            if (!isDragging) {
+                setCurrentState('idle');
+            }
         }, STATE_IDLE_DELAY);
     }
 }
@@ -1302,18 +1314,36 @@ document.addEventListener('wheel', (e) => {
 
 // Hook into pointer move for move state
 document.addEventListener('pointermove', (e) => {
-    // Only set move state if not scrolling or zooming
-    if (!isScrolling && !isZooming) {
+    // If mouse button is down and we're moving, this is a drag
+    if (isMouseButtonDown) {
+        if (!isDragging) {
+            isDragging = true;
+            setCurrentState('drag');
+        }
+        return;
+    }
+    // Only set move state if not scrolling or zooming and not dragging
+    if (!isScrolling && !isZooming && !isDragging) {
         setCurrentState('move');
     }
 });
 
-// Hook into click events for click state
+// Hook into click events for click state and track dragging
 document.addEventListener('mousedown', (e) => {
+    isMouseButtonDown = true;
     setCurrentState('click');
     const buttonNames = ['Left', 'Middle', 'Right', 'Back', 'Forward'];
     lastClickInfo = buttonNames[e.button] || `Button ${e.button}`;
     updateBarStats();
+});
+
+// Track mouseup to end dragging
+document.addEventListener('mouseup', (e) => {
+    isMouseButtonDown = false;
+    if (isDragging) {
+        isDragging = false;
+        setCurrentState('idle');
+    }
 });
 
 // Initialize bar stats
@@ -1645,7 +1675,10 @@ mapViewport.addEventListener('mousedown', (e) => {
     mapPanStartY = mapPanY;
 
     mapsDraggingEl.textContent = 'Yes';
+    isDragging = true;
+    isMouseButtonDown = true;
     setMapsState('move');
+    setCurrentState('drag');
     addMapsLogEntry('drag start', 'pointer');
 
     e.preventDefault();
@@ -1669,7 +1702,10 @@ document.addEventListener('mouseup', (e) => {
 
     mapIsDragging = false;
     mapsDraggingEl.textContent = 'No';
+    isDragging = false;
+    isMouseButtonDown = false;
     setMapsState('idle');
+    setCurrentState('idle');
     mapsGestureEl.textContent = '-';
     addMapsLogEntry(`drag end (${Math.round(mapPanX)}, ${Math.round(mapPanY)})`, 'pointer');
 });
