@@ -2,9 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Touchpad Testing Dashboard</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Prevent browser zoom on touch devices */
+        html, body {
+            touch-action: pan-x pan-y;
+        }
+        #debug-view {
+            touch-action: none;
+        }
+    </style>
 </head>
 <body>
     <!-- Tab Navigation -->

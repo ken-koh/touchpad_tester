@@ -5,6 +5,23 @@ const totalX = document.getElementById('total-x');
 const totalY = document.getElementById('total-y');
 const resetScrollBtn = document.getElementById('reset-scroll');
 
+// Prevent browser zoom globally
+document.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+// Prevent double-tap zoom on touch devices
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+    }
+    lastTouchEnd = now;
+}, { passive: false });
+
 const leftButton = document.getElementById('left-button');
 const rightButton = document.getElementById('right-button');
 
@@ -901,6 +918,8 @@ let debugPinchActive = false;
 if (debugView) {
     debugView.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
+            // Prevent default zoom behavior
+            e.preventDefault();
             // Pinch start - reset scale
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -910,10 +929,12 @@ if (debugView) {
             updateZoomVisualization();
             console.log('[Debug Pinch] Pinch start detected');
         }
-    }, { passive: true });
+    }, { passive: false });
 
     debugView.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2 && debugPinchActive) {
+            // Prevent default zoom behavior
+            e.preventDefault();
             // Pinch zoom
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -921,7 +942,7 @@ if (debugView) {
 
             const scaleDelta = (dist - debugTouchStartDist) * 0.01;
             lastPinchScale = Math.max(0.1, Math.min(10, lastPinchScale + scaleDelta));
-            
+
             setCurrentState('pinch');
             currentGesture = scaleDelta > 0 ? 'pinch out' : 'pinch in';
             updateGestureDisplay(currentGesture, '2', lastPinchScale.toFixed(2) + 'x', lastSwipeDirection);
@@ -929,13 +950,26 @@ if (debugView) {
 
             debugTouchStartDist = dist;
         }
-    }, { passive: true });
+    }, { passive: false });
 
     debugView.addEventListener('touchend', (e) => {
         if (e.touches.length < 2) {
             debugPinchActive = false;
         }
     }, { passive: true });
+
+    // Prevent gesture events (Safari/iOS)
+    debugView.addEventListener('gesturestart', (e) => {
+        e.preventDefault();
+    }, { passive: false });
+
+    debugView.addEventListener('gesturechange', (e) => {
+        e.preventDefault();
+    }, { passive: false });
+
+    debugView.addEventListener('gestureend', (e) => {
+        e.preventDefault();
+    }, { passive: false });
 }
 
 // Initialize zoom visualization on load
@@ -2353,36 +2387,36 @@ function drawZoomGraph() {
     ctx.fillStyle = '#aaa';
     ctx.font = 'bold 12px Consolas, monospace';
     ctx.textAlign = 'right';
-    
+
     // Draw "1.0x" baseline label
     ctx.fillText('1.0x', leftMargin - 5, baselineY + 4);
-    
+
     // Draw max zoom label
     const maxZoomY = 20;
     ctx.fillText(maxLevel.toFixed(1) + 'x', leftMargin - 5, maxZoomY + 4);
-    
+
     // Draw min zoom label
     const minZoomY = height - 25;
     ctx.fillText(minLevel.toFixed(1) + 'x', leftMargin - 5, minZoomY + 4);
-    
+
     // Draw intermediate labels if range is large enough
     if (levelRange > 0.5) {
         const midHighLevel = 1 + (maxLevel - 1) / 2;
         const midLowLevel = 1 - (1 - minLevel) / 2;
-        
+
         if (maxLevel > 1.2) {
             const midHighY = baselineY - (baselineY - maxZoomY) / 2;
             ctx.fillStyle = '#888';
             ctx.fillText(midHighLevel.toFixed(1) + 'x', leftMargin - 5, midHighY + 4);
         }
-        
+
         if (minLevel < 0.8) {
             const midLowY = baselineY + (minZoomY - baselineY) / 2;
             ctx.fillStyle = '#888';
             ctx.fillText(midLowLevel.toFixed(1) + 'x', leftMargin - 5, midLowY + 4);
         }
     }
-    
+
     // Draw vertical axis line
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1;
