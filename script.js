@@ -1007,13 +1007,21 @@ if (debugScrollOverlay) {
 
         const currentTop = debugScrollOverlay.scrollTop;
         const currentLeft = debugScrollOverlay.scrollLeft;
-        const deltaY = currentTop - lastDebugOverlayScrollTop;
-        const deltaX = currentLeft - lastDebugOverlayScrollLeft;
+        const scrollDeltaY = currentTop - lastDebugOverlayScrollTop;
+        const scrollDeltaX = currentLeft - lastDebugOverlayScrollLeft;
 
         // Only process significant scroll deltas
-        if (Math.abs(deltaY) >= 2 || Math.abs(deltaX) >= 2) {
-            // Update scroll display
-            handleScroll({ deltaX: deltaX, deltaY: deltaY });
+        if (Math.abs(scrollDeltaY) >= 2 || Math.abs(scrollDeltaX) >= 2) {
+            // Update scroll display directly (same as wheel handler)
+            deltaX.textContent = Math.round(scrollDeltaX);
+            deltaY.textContent = Math.round(scrollDeltaY);
+            
+            scrollTotalX += scrollDeltaX;
+            scrollTotalY += scrollDeltaY;
+            
+            totalX.textContent = Math.round(scrollTotalX);
+            totalY.textContent = Math.round(scrollTotalY);
+            
             setCurrentState('scroll');
         }
 

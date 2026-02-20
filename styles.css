@@ -71,7 +71,7 @@ body {
     right: 0;
     bottom: 0;
     overflow: auto;
-    z-index: 1;
+    z-index: 100; /* Above all debug content */
     pointer-events: auto;
     -webkit-overflow-scrolling: touch;
     /* Hide scrollbars */
@@ -89,13 +89,23 @@ body {
     pointer-events: none;
 }
 
-/* Ensure debug content is above the scroll overlay */
+/* Dashboard content - allow pointer events to pass through overlay for buttons etc */
 .dashboard {
     height: 100%;
     display: flex;
     flex-direction: column;
     position: relative;
-    z-index: 2;
+    z-index: 1;
+}
+
+/* Make interactive elements clickable through the overlay */
+.dashboard button,
+.dashboard input,
+.dashboard select,
+.dashboard a,
+.dashboard .panel {
+    position: relative;
+    z-index: 101;
     pointer-events: auto;
 }
 
