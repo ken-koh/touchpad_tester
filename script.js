@@ -492,7 +492,8 @@ function monitorScrollPositions() {
             // If position changed significantly (ignore tiny oscillations), we detected a scroll
             if (Math.abs(deltaY) >= 2 || Math.abs(deltaX) >= 2) {
                 // Log the detected scroll
-                console.log(`[VR Scroll] Position change detected on ${key}: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
+                // Debug logging disabled
+                // console.log(`[VR Scroll] Position change detected on ${key}: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
 
                 // Process as a scroll event - returns false if it was a jump
                 const wasProcessed = processAlternativeScroll(deltaX, deltaY, 'position-monitor');
@@ -524,7 +525,8 @@ function checkWindowScroll() {
     const deltaY = currentY - lastWindowScrollY;
 
     if (Math.abs(deltaX) > 0 || Math.abs(deltaY) > 0) {
-        console.log(`[VR Scroll] Window position change: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
+        // Debug logging disabled
+        // console.log(`[VR Scroll] Window position change: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
         processAlternativeScroll(deltaX, deltaY, 'window-position');
     }
 
@@ -562,7 +564,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const deltaX = e.target.scrollLeft - (target._lastScrollLeft || 0);
 
                 if (Math.abs(deltaX) > 0 || Math.abs(deltaY) > 0) {
-                    console.log(`[Scroll Event] ${selector}: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
+                    // Debug logging disabled
+                    // console.log(`[Scroll Event] ${selector}: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
                     processAlternativeScroll(deltaX, deltaY, 'scroll-event');
                 }
 
@@ -623,7 +626,8 @@ function aggressiveScrollCheck() {
             const deltaX = currentLeft - lastBrowseScrollLeft;
 
             if (Math.abs(deltaY) > 0.5 || Math.abs(deltaX) > 0.5) {
-                console.log(`[Aggressive Check] Browse view scroll detected: top=${currentTop}, deltaY=${deltaY.toFixed(1)}`);
+                // Debug logging disabled
+                // console.log(`[Aggressive Check] Browse view scroll detected: top=${currentTop}, deltaY=${deltaY.toFixed(1)}`);
                 processAlternativeScroll(deltaX, deltaY, 'aggressive-poll');
             }
 
@@ -2331,12 +2335,6 @@ function drawZoomGraph() {
     ctx.lineTo(width, baselineY);
     ctx.stroke();
 
-    // Draw "1.0" label
-    ctx.fillStyle = '#666';
-    ctx.font = '10px Consolas, monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('1.0', 5, baselineY - 5);
-
     // Find data range
     const maxTime = zoomGraphData[zoomGraphData.length - 1].time;
     const minTime = zoomGraphData[0].time;
@@ -2350,8 +2348,51 @@ function drawZoomGraph() {
 
     const levelRange = Math.max(maxLevel - minLevel, 0.5);
 
+    // Draw y-axis labels with better visibility
+    const leftMargin = 45;
+    ctx.fillStyle = '#aaa';
+    ctx.font = 'bold 12px Consolas, monospace';
+    ctx.textAlign = 'right';
+    
+    // Draw "1.0x" baseline label
+    ctx.fillText('1.0x', leftMargin - 5, baselineY + 4);
+    
+    // Draw max zoom label
+    const maxZoomY = 20;
+    ctx.fillText(maxLevel.toFixed(1) + 'x', leftMargin - 5, maxZoomY + 4);
+    
+    // Draw min zoom label
+    const minZoomY = height - 25;
+    ctx.fillText(minLevel.toFixed(1) + 'x', leftMargin - 5, minZoomY + 4);
+    
+    // Draw intermediate labels if range is large enough
+    if (levelRange > 0.5) {
+        const midHighLevel = 1 + (maxLevel - 1) / 2;
+        const midLowLevel = 1 - (1 - minLevel) / 2;
+        
+        if (maxLevel > 1.2) {
+            const midHighY = baselineY - (baselineY - maxZoomY) / 2;
+            ctx.fillStyle = '#888';
+            ctx.fillText(midHighLevel.toFixed(1) + 'x', leftMargin - 5, midHighY + 4);
+        }
+        
+        if (minLevel < 0.8) {
+            const midLowY = baselineY + (minZoomY - baselineY) / 2;
+            ctx.fillStyle = '#888';
+            ctx.fillText(midLowLevel.toFixed(1) + 'x', leftMargin - 5, midLowY + 4);
+        }
+    }
+    
+    // Draw vertical axis line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, 10);
+    ctx.lineTo(leftMargin, height - 20);
+    ctx.stroke();
+
     // Scale factor
-    const xScale = width / timeRange;
+    const xScale = (width - leftMargin) / timeRange;
     const yScale = (height - 40) / levelRange;
 
     // Draw zoom level line
@@ -2360,7 +2401,7 @@ function drawZoomGraph() {
     ctx.beginPath();
 
     zoomGraphData.forEach((d, i) => {
-        const x = (d.time - minTime) * xScale;
+        const x = leftMargin + (d.time - minTime) * xScale;
         const y = height - 20 - (d.level - minLevel) * yScale;
 
         if (i === 0) {
@@ -2372,10 +2413,10 @@ function drawZoomGraph() {
     ctx.stroke();
 
     // Draw time labels
-    ctx.fillStyle = '#666';
-    ctx.font = '10px Consolas, monospace';
+    ctx.fillStyle = '#888';
+    ctx.font = '11px Consolas, monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('0ms', 5, height - 5);
+    ctx.fillText('0ms', leftMargin + 5, height - 5);
     ctx.textAlign = 'right';
     ctx.fillText(Math.round(timeRange) + 'ms', width - 5, height - 5);
 }
