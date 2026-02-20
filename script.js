@@ -273,6 +273,9 @@ function processAlternativeScroll(deltaX, deltaY, source) {
     scrollTotalX += Math.abs(deltaX);
     scrollTotalY += Math.abs(deltaY);
 
+    // Update state to scrolling
+    setCurrentState('scroll');
+
     // Update display
     deltaXEl = document.getElementById('delta-x');
     deltaYEl = document.getElementById('delta-y');
