@@ -63,38 +63,106 @@ body {
     position: relative;
 }
 
-/* Scrollable overlay for VR scroll detection on debug view - positioned below content */
-.debug-scroll-overlay {
+/* Dashboard content */
+.dashboard {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Scroll detection area inside scroll panel */
+.scroll-detect-wrapper {
+    position: relative;
+    flex: 1;
+    min-height: 150px;
+    margin-bottom: 10px;
+}
+
+.scroll-detect-area {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     overflow: auto;
-    z-index: 0; /* Below content */
+    border: 2px dashed rgba(100, 200, 255, 0.5);
+    border-radius: 8px;
+    background: rgba(100, 200, 255, 0.05);
     -webkit-overflow-scrolling: touch;
     /* Hide scrollbars */
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
 
-.debug-scroll-overlay::-webkit-scrollbar {
+.scroll-detect-area::-webkit-scrollbar {
     display: none;
 }
 
-.debug-scroll-content {
-    height: 10000px;
-    width: 10000px;
+.scroll-detect-content {
+    height: 5000px;
+    width: 5000px;
 }
 
-/* Dashboard content - above overlay, receives all pointer events */
-.dashboard {
-    height: 100%;
+.scroll-detect-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     flex-direction: column;
-    position: relative;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
     z-index: 1;
-    pointer-events: auto;
+}
+
+.scroll-detect-label {
+    font-size: 12px;
+    color: rgba(100, 200, 255, 0.8);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 4px 12px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.scroll-detect-overlay .scroll-display {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.scroll-detect-overlay .scroll-item {
+    width: 80px;
+    text-align: center;
+    padding: 4px 6px;
+    margin-bottom: 20px;
+}
+
+.scroll-detect-overlay .scroll-item .label {
+    font-size: 0.65rem;
+    margin-bottom: 1px;
+}
+
+.scroll-detect-overlay .scroll-item .value {
+    min-width: 60px;
+    display: inline-block;
+    font-size: 1.1rem;
+}
+
+/* Make scroll panel use flexbox to fill height */
+.scroll-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.scroll-panel h2 {
+    flex-shrink: 0;
+}
+
+.scroll-panel .reset-btn {
+    flex-shrink: 0;
 }
 
 header {

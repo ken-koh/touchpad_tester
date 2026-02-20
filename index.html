@@ -31,11 +31,6 @@
 
     <!-- Debug Dashboard View -->
     <div id="debug-view" class="view">
-        <!-- Scrollable overlay for VR scroll detection -->
-        <div class="debug-scroll-overlay" id="debug-scroll-overlay">
-            <div class="debug-scroll-content"></div>
-        </div>
-
         <div class="dashboard">
             <header>
                 <h1>Touchpad Testing Dashboard</h1>
@@ -47,22 +42,31 @@
                     <!-- Scroll Value Display -->
                     <section class="panel scroll-panel">
                         <h2>Scroll Values</h2>
-                        <div class="scroll-display">
-                            <div class="scroll-item">
-                                <span class="label">Delta X</span>
-                                <span id="delta-x" class="value">0</span>
+                        <!-- Scrollable area for VR scroll detection -->
+                        <div class="scroll-detect-wrapper">
+                            <div class="scroll-detect-area" id="scroll-detect-area">
+                                <div class="scroll-detect-content"></div>
                             </div>
-                            <div class="scroll-item">
-                                <span class="label">Delta Y</span>
-                                <span id="delta-y" class="value">0</span>
-                            </div>
-                            <div class="scroll-item">
-                                <span class="label">Total X</span>
-                                <span id="total-x" class="value">0</span>
-                            </div>
-                            <div class="scroll-item">
-                                <span class="label">Total Y</span>
-                                <span id="total-y" class="value">0</span>
+                            <div class="scroll-detect-overlay">
+                                <div class="scroll-detect-label">Scroll here to detect</div>
+                                <div class="scroll-display">
+                                    <div class="scroll-item">
+                                        <span class="label">Delta X</span>
+                                        <span id="delta-x" class="value">0</span>
+                                    </div>
+                                    <div class="scroll-item">
+                                        <span class="label">Delta Y</span>
+                                        <span id="delta-y" class="value">0</span>
+                                    </div>
+                                    <div class="scroll-item">
+                                        <span class="label">Total X</span>
+                                        <span id="total-x" class="value">0</span>
+                                    </div>
+                                    <div class="scroll-item">
+                                        <span class="label">Total Y</span>
+                                        <span id="total-y" class="value">0</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <button id="reset-scroll" class="reset-btn">Reset</button>
