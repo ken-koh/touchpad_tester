@@ -1158,11 +1158,46 @@ h2 {
     height: calc(100% - 54px);
     overflow: hidden;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    position: relative;
 }
 
 #graph-view.active {
     display: flex;
     flex-direction: column;
+}
+
+/* Scrollable overlay for VR scroll detection */
+.graph-scroll-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
+    z-index: 1;
+    pointer-events: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Hide scrollbars */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+}
+
+.graph-scroll-overlay::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Opera */
+}
+
+.graph-scroll-content {
+    height: 10000px;
+    width: 10000px; /* Wide for horizontal scrolling */
+    pointer-events: none;
+}
+
+/* Ensure graph content is above the scroll overlay */
+.graph-header,
+.graph-content {
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
 }
 
 .graph-header {

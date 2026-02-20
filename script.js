@@ -1912,6 +1912,53 @@ let graphStartTime = 0;
 let motionHistory = [];
 const MAX_HISTORY_ITEMS = 20;
 
+// Graph scroll overlay for VR scroll detection
+const graphScrollOverlay = document.getElementById('graph-scroll-overlay');
+let lastGraphOverlayScrollTop = 5000; // Start centered
+let lastGraphOverlayScrollLeft = 5000; // Start centered
+
+if (graphScrollOverlay) {
+    // Center the scroll position initially
+    graphScrollOverlay.scrollTop = 5000;
+    graphScrollOverlay.scrollLeft = 5000;
+
+    graphScrollOverlay.addEventListener('scroll', () => {
+        if (!isGraphModeActive()) return;
+
+        const currentTop = graphScrollOverlay.scrollTop;
+        const currentLeft = graphScrollOverlay.scrollLeft;
+        const deltaY = currentTop - lastGraphOverlayScrollTop;
+        const deltaX = currentLeft - lastGraphOverlayScrollLeft;
+
+        // Only process significant scroll deltas
+        if (Math.abs(deltaY) >= 2 || Math.abs(deltaX) >= 2) {
+            // Start motion if not active
+            if (!isMotionActive) {
+                startMotion('scroll');
+            }
+
+            // Update motion with scroll data
+            updateMotion('scroll', {
+                deltaX: deltaX,
+                deltaY: deltaY
+            });
+        }
+
+        lastGraphOverlayScrollTop = currentTop;
+        lastGraphOverlayScrollLeft = currentLeft;
+
+        // Re-center when getting close to edges to enable infinite scrolling
+        if (currentTop < 1000 || currentTop > 9000) {
+            graphScrollOverlay.scrollTop = 5000;
+            lastGraphOverlayScrollTop = 5000;
+        }
+        if (currentLeft < 1000 || currentLeft > 9000) {
+            graphScrollOverlay.scrollLeft = 5000;
+            lastGraphOverlayScrollLeft = 5000;
+        }
+    }, { passive: true });
+}
+
 function isGraphModeActive() {
     return graphView && graphView.classList.contains('active');
 }
