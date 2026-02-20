@@ -201,6 +201,11 @@ function processAlternativeScroll(deltaX, deltaY, source) {
         return false;
     }
 
+    // Ignore tiny deltas (likely rendering noise, not real scrolls)
+    if (Math.abs(deltaX) < 2 && Math.abs(deltaY) < 2) {
+        return false;
+    }
+
     const now = Date.now();
 
     // Debounce to avoid duplicate detection with wheel events
@@ -427,7 +432,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initScrollPositionMonitoring();
 
     // Terminate scroll motion when any link is clicked (to handle anchor jumps)
-    document.addEventListener('click', (e) => {
+    // Use mousedown for faster response - fires before the scroll happens
+    document.addEventListener('mousedown', (e) => {
         const link = e.target.closest('a');
         if (link && link.getAttribute('href')) {
             // Link clicked - terminate any ongoing scroll motion
@@ -483,8 +489,8 @@ function monitorScrollPositions() {
             const deltaY = currentTop - lastPos.top;
             const deltaX = currentLeft - lastPos.left;
 
-            // If position changed, we detected a scroll
-            if (Math.abs(deltaY) > 0 || Math.abs(deltaX) > 0) {
+            // If position changed significantly (ignore tiny oscillations), we detected a scroll
+            if (Math.abs(deltaY) >= 2 || Math.abs(deltaX) >= 2) {
                 // Log the detected scroll
                 console.log(`[VR Scroll] Position change detected on ${key}: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
 
@@ -544,6 +550,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el) {
             el.addEventListener('scroll', (e) => {
                 if (!isBrowseModeActive()) return;
+                if (isScrollTrackingDisabled()) {
+                    // Reset baselines during disabled period
+                    e.target._lastScrollTop = e.target.scrollTop;
+                    e.target._lastScrollLeft = e.target.scrollLeft;
+                    return;
+                }
 
                 const target = e.target;
                 const deltaY = e.target.scrollTop - (target._lastScrollTop || 0);
