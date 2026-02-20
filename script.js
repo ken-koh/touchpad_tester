@@ -138,15 +138,87 @@ let lastScrollMotionDeltaX = 0;
 let lastScrollMotionDeltaY = 0;
 let lastScrollMotionDuration = 0;
 let scrollMotionTimeout = null;
+let lastJumpTime = 0; // Timestamp of last detected jump - used to invalidate ongoing motions
+let scrollTrackingDisabled = false; // Global flag to disable ALL scroll tracking
 const SCROLL_MOTION_END_DELAY = 500; // 500ms threshold
 
+// Centralized function to terminate all scroll motion tracking
+function terminateAllScrollMotion() {
+    const now = Date.now();
+    lastJumpTime = now;
+
+    // DISABLE all scroll tracking globally
+    scrollTrackingDisabled = true;
+
+    // Reset scroll state
+    isScrolling = false;
+    lastScrollDirX = 0;
+    lastScrollDirY = 0;
+
+    // Clear all timeouts
+    if (scrollMotionTimeout) {
+        clearTimeout(scrollMotionTimeout);
+        scrollMotionTimeout = null;
+    }
+    if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = null;
+    }
+
+    // Reset motion tracking
+    scrollMotionStartTime = 0;
+    scrollMotionLastEventTime = 0;
+    scrollMotionDeltaX = 0;
+    scrollMotionDeltaY = 0;
+
+    // Update display to show motion ended
+    updateScrollMotionDisplay(lastScrollMotionDuration, true);
+
+    console.log('[Scroll] All scroll motion terminated, tracking disabled');
+
+    // Re-enable tracking after cooldown
+    setTimeout(() => {
+        scrollTrackingDisabled = false;
+        // Reset all baseline positions
+        lastScrollPositions.clear();
+        lastBrowseScrollTop = document.getElementById('browse-view')?.scrollTop || 0;
+        lastBrowseScrollLeft = document.getElementById('browse-view')?.scrollLeft || 0;
+        console.log('[Scroll] Tracking re-enabled, baselines reset');
+    }, 300);
+}
+
+// Check if scroll tracking is currently disabled
+function isScrollTrackingDisabled() {
+    return scrollTrackingDisabled;
+}
+
+// Threshold to detect programmatic jumps vs actual scrolling
+const SCROLL_JUMP_THRESHOLD = 500; // pixels - jumps larger than this are ignored
+
 function processAlternativeScroll(deltaX, deltaY, source) {
+    // Check global disable flag FIRST
+    if (isScrollTrackingDisabled()) {
+        return false;
+    }
+
     const now = Date.now();
 
     // Debounce to avoid duplicate detection with wheel events
     // Only process if no wheel event happened recently
     if (now - lastScrollTime < 50) {
-        return;
+        return false; // Return false to indicate we didn't process this
+    }
+
+    // Ignore large jumps (e.g., from clicking anchor links or scrollTo calls)
+    // These are programmatic position changes, not actual scroll gestures
+    if (Math.abs(deltaX) > SCROLL_JUMP_THRESHOLD || Math.abs(deltaY) > SCROLL_JUMP_THRESHOLD) {
+        terminateAllScrollMotion();
+        return false; // Return false to indicate jump was detected
+    }
+
+    // Ignore events that started before the last jump
+    if (scrollMotionStartTime > 0 && scrollMotionStartTime < lastJumpTime) {
+        return false;
     }
 
     const currentDirX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
@@ -163,13 +235,22 @@ function processAlternativeScroll(deltaX, deltaY, source) {
             addLogEntry(`scroll start (${source}) dir: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
         }
     } else {
-        // Check for direction change
-        if ((currentDirX !== 0 && currentDirX !== lastScrollDirX) ||
-            (currentDirY !== 0 && currentDirY !== lastScrollDirY)) {
-            if (isBrowseModeActive()) {
-                addLogEntry(`scroll direction change (${source}) to: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
+        // Check for axis change (switching between X and Y scrolling)
+        const wasScrollingX = lastScrollDirX !== 0;
+        const wasScrollingY = lastScrollDirY !== 0;
+        const nowScrollingX = currentDirX !== 0;
+        const nowScrollingY = currentDirY !== 0;
+
+        // Log axis change: e.g., was scrolling horizontally, now scrolling vertically (or vice versa)
+        if (isBrowseModeActive()) {
+            if (nowScrollingX && !wasScrollingX && wasScrollingY) {
+                addLogEntry(`scroll axis change (${source}) to: horizontal`, 'scroll');
+            } else if (nowScrollingY && !wasScrollingY && wasScrollingX) {
+                addLogEntry(`scroll axis change (${source}) to: vertical`, 'scroll');
             }
         }
+
+        // Update direction tracking
         if (currentDirX !== 0) lastScrollDirX = currentDirX;
         if (currentDirY !== 0) lastScrollDirY = currentDirY;
     }
@@ -220,7 +301,7 @@ function processAlternativeScroll(deltaX, deltaY, source) {
         if (isBrowseModeActive()) {
             addLogEntry(`scroll motion: Δ(${scrollMotionDeltaX.toFixed(0)}, ${scrollMotionDeltaY.toFixed(0)}) in ${lastScrollMotionDuration}ms`, 'scroll');
         }
-        
+
         // Reset motion tracking for next motion
         scrollMotionTimeout = null;
         scrollMotionStartTime = 0;
@@ -341,6 +422,15 @@ document.addEventListener('DOMContentLoaded', () => {
     initTouchScrollDetection();
     initPointerScrollDetection();
     initScrollPositionMonitoring();
+
+    // Terminate scroll motion when any link is clicked (to handle anchor jumps)
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (link && link.getAttribute('href')) {
+            // Link clicked - terminate any ongoing scroll motion
+            terminateAllScrollMotion();
+        }
+    }, true); // Use capture phase to catch it early
 });
 
 // Scroll position monitoring for VR headsets
@@ -379,6 +469,12 @@ function monitorScrollPositions() {
             const currentTop = el.scrollTop;
             const currentLeft = el.scrollLeft;
 
+            // During cooldown, just update baselines without processing
+            if (isScrollTrackingDisabled()) {
+                lastScrollPositions.set(key, { top: currentTop, left: currentLeft });
+                return;
+            }
+
             const lastPos = lastScrollPositions.get(key) || { top: currentTop, left: currentLeft };
 
             const deltaY = currentTop - lastPos.top;
@@ -389,11 +485,14 @@ function monitorScrollPositions() {
                 // Log the detected scroll
                 console.log(`[VR Scroll] Position change detected on ${key}: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
 
-                // Process as a scroll event
-                processAlternativeScroll(deltaX, deltaY, 'position-monitor');
+                // Process as a scroll event - returns false if it was a jump
+                const wasProcessed = processAlternativeScroll(deltaX, deltaY, 'position-monitor');
+
+                // If it was a jump, we still need to update position tracking
+                // so subsequent monitoring uses the new position as baseline
             }
 
-            // Update last known position
+            // Always update last known position (important after jumps)
             lastScrollPositions.set(key, { top: currentTop, left: currentLeft });
         });
     }
@@ -493,6 +592,12 @@ let lastBrowseScrollTop = 0;
 let lastBrowseScrollLeft = 0;
 
 function aggressiveScrollCheck() {
+    // Check global disable flag
+    if (isScrollTrackingDisabled()) {
+        requestAnimationFrame(aggressiveScrollCheck);
+        return;
+    }
+
     if (isBrowseModeActive()) {
         const browseView = document.getElementById('browse-view');
         if (browseView) {
@@ -529,6 +634,11 @@ function getDirDescription(dirX, dirY) {
 
 // Scroll handling (wheel event - primary method for touchpads/mice)
 document.addEventListener('wheel', (e) => {
+    // Check global disable flag FIRST
+    if (isScrollTrackingDisabled()) {
+        return;
+    }
+
     lastScrollTime = Date.now(); // Mark that wheel event occurred
     if (e.ctrlKey) {
         e.preventDefault();
@@ -599,9 +709,18 @@ document.addEventListener('wheel', (e) => {
     // Update status bar with current motion accumulation
     updateScrollMotionDisplay(now - scrollMotionStartTime);
 
+    // Store the motion start time to check against jumps
+    const currentMotionStartTime = scrollMotionStartTime;
+
     // Reset scroll motion end detection
     clearTimeout(scrollMotionTimeout);
     scrollMotionTimeout = setTimeout(() => {
+        // Check if this motion was invalidated by a jump
+        if (currentMotionStartTime < lastJumpTime) {
+            scrollMotionTimeout = null;
+            return;
+        }
+
         // Motion ended - save the final values using last event time, not timeout time
         lastScrollMotionDeltaX = scrollMotionDeltaX;
         lastScrollMotionDeltaY = scrollMotionDeltaY;
@@ -611,7 +730,7 @@ document.addEventListener('wheel', (e) => {
         updateScrollMotionDisplay(lastScrollMotionDuration, true);
 
         addLogEntry(`scroll motion: Δ(${scrollMotionDeltaX.toFixed(0)}, ${scrollMotionDeltaY.toFixed(0)}) in ${lastScrollMotionDuration}ms`, 'scroll');
-        
+
         // Reset motion tracking for next motion
         scrollMotionTimeout = null;
         scrollMotionStartTime = 0;
@@ -660,11 +779,12 @@ document.addEventListener('mouseup', (e) => {
 function handleZoom(e) {
     const currentZoomDir = e.deltaY < 0 ? 1 : (e.deltaY > 0 ? -1 : 0); // negative deltaY = zoom in
 
-    // Detect zoom start
+    // Detect zoom start - reset pinch scale for new gesture
     if (!isZooming) {
         isZooming = true;
         lastZoomDir = currentZoomDir;
-        addLogEntry(`zoom start (${Math.round(currentZoom * 100)}%)`, 'zoom');
+        lastPinchScale = 1;
+        addLogEntry(`zoom start (${lastPinchScale.toFixed(2)}x)`, 'zoom');
     }
 
     // Detect direction change
@@ -681,20 +801,23 @@ function handleZoom(e) {
         clearTimeout(zoomTimeout);
     }
     zoomTimeout = setTimeout(() => {
+        addLogEntry(`zoom end (${lastPinchScale.toFixed(2)}x)`, 'zoom');
         isZooming = false;
         lastZoomDir = 0;
     }, EVENT_END_DELAY);
 
+    // Update pinch scale
     const delta = -e.deltaY * ZOOM_SENSITIVITY;
-    currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom + delta));
+    lastPinchScale = Math.max(0.1, Math.min(10, lastPinchScale + delta));
     updateZoomVisualization();
 }
 
 function updateZoomVisualization() {
-    zoomLevel.textContent = Math.round(currentZoom * 100) + '%';
+    // Display pinch multiplier (resets with each new gesture)
+    zoomLevel.textContent = lastPinchScale.toFixed(2) + 'x';
 
     const baseDistance = 50;
-    const distance = baseDistance * currentZoom;
+    const distance = baseDistance * lastPinchScale;
 
     const containerWidth = document.querySelector('.zoom-visualization').offsetWidth;
     const center = containerWidth / 2;
@@ -1086,8 +1209,10 @@ let currentGesture = '-';
 let lastPinchScale = 1;
 let lastSwipeDirection = '-';
 let gestureTimeout = null;
+let lastPinchWheelTime = 0;
 const SWIPE_THRESHOLD = 30;
 const PINCH_THRESHOLD = 10;
+const PINCH_GESTURE_TIMEOUT = 500;
 
 function getDistance(touch1, touch2) {
     const dx = touch1.clientX - touch2.clientX;
@@ -1238,11 +1363,22 @@ document.addEventListener('wheel', (e) => {
     // Detect if this might be a trackpad gesture
     // Trackpads often send wheel events with ctrlKey for pinch
     if (e.ctrlKey) {
+        const now = Date.now();
+        // Reset pinch scale if this is a new pinch gesture (after timeout)
+        if (now - lastPinchWheelTime > PINCH_GESTURE_TIMEOUT) {
+            lastPinchScale = 1;
+            console.log('[Pinch] New gesture detected, resetting scale to 1.0x');
+        }
+        lastPinchWheelTime = now;
+
         currentGesture = e.deltaY < 0 ? 'pinch out' : 'pinch in';
         const scaleDelta = -e.deltaY * 0.01;
         lastPinchScale = Math.max(0.1, Math.min(10, lastPinchScale + scaleDelta));
         setCurrentState('pinch');
         updateGestureDisplay(currentGesture, '2', lastPinchScale.toFixed(2) + 'x', lastSwipeDirection);
+
+        // Update Debug Dashboard zoom visualization
+        updateZoomVisualization();
     } else {
         // Regular scroll - could be 2-finger scroll on trackpad
         if (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) > 0) {
