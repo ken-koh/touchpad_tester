@@ -885,8 +885,54 @@ function isBrowseModeActive() {
 
 resetZoomBtn.addEventListener('click', () => {
     currentZoom = 1.0;
+    lastPinchScale = 1;
     updateZoomVisualization();
 });
+
+// Touch handlers for Debug Dashboard pinch detection (similar to Graph View)
+const debugView = document.getElementById('debug-view');
+let debugTouchStartDist = 0;
+let debugPinchActive = false;
+
+if (debugView) {
+    debugView.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            // Pinch start - reset scale
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            debugTouchStartDist = Math.sqrt(dx * dx + dy * dy);
+            debugPinchActive = true;
+            lastPinchScale = 1;
+            updateZoomVisualization();
+            console.log('[Debug Pinch] Pinch start detected');
+        }
+    }, { passive: true });
+
+    debugView.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && debugPinchActive) {
+            // Pinch zoom
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            const scaleDelta = (dist - debugTouchStartDist) * 0.01;
+            lastPinchScale = Math.max(0.1, Math.min(10, lastPinchScale + scaleDelta));
+            
+            setCurrentState('pinch');
+            currentGesture = scaleDelta > 0 ? 'pinch out' : 'pinch in';
+            updateGestureDisplay(currentGesture, '2', lastPinchScale.toFixed(2) + 'x', lastSwipeDirection);
+            updateZoomVisualization();
+
+            debugTouchStartDist = dist;
+        }
+    }, { passive: true });
+
+    debugView.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+            debugPinchActive = false;
+        }
+    }, { passive: true });
+}
 
 // Initialize zoom visualization on load
 window.addEventListener('load', () => {
