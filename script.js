@@ -128,6 +128,18 @@ function handleElementScroll(e, element) {
     element.dataset.lastScrollLeft = scrollLeft;
 }
 
+
+// Scroll motion tracking for status bar
+let scrollMotionStartTime = 0;
+let scrollMotionLastEventTime = 0; // Track time of last scroll event
+let scrollMotionDeltaX = 0;
+let scrollMotionDeltaY = 0;
+let lastScrollMotionDeltaX = 0;
+let lastScrollMotionDeltaY = 0;
+let lastScrollMotionDuration = 0;
+let scrollMotionTimeout = null;
+const SCROLL_MOTION_END_DELAY = 500; // 500ms threshold
+
 function processAlternativeScroll(deltaX, deltaY, source) {
     const now = Date.now();
 
@@ -140,27 +152,41 @@ function processAlternativeScroll(deltaX, deltaY, source) {
     const currentDirX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
     const currentDirY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
 
-    // Detect scroll start
+    // Detect scroll start (for logging purposes)
     if (!isScrolling) {
         isScrolling = true;
         lastScrollDirX = currentDirX;
         lastScrollDirY = currentDirY;
 
         if (isBrowseModeActive()) {
-            updateBrowseState('scrolling');
-            addBrowseLogEntry(`scroll start (${source}) dir: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
+            setCurrentState('scrolling');
+            addLogEntry(`scroll start (${source}) dir: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
         }
     } else {
         // Check for direction change
         if ((currentDirX !== 0 && currentDirX !== lastScrollDirX) ||
             (currentDirY !== 0 && currentDirY !== lastScrollDirY)) {
             if (isBrowseModeActive()) {
-                addBrowseLogEntry(`scroll direction change (${source}) to: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
+                addLogEntry(`scroll direction change (${source}) to: ${getDirDescription(currentDirX, currentDirY)}`, 'scroll');
             }
         }
         if (currentDirX !== 0) lastScrollDirX = currentDirX;
         if (currentDirY !== 0) lastScrollDirY = currentDirY;
     }
+
+    // Start new scroll motion tracking only if no motion is in progress
+    if (scrollMotionStartTime === 0 || scrollMotionTimeout === null) {
+        scrollMotionStartTime = now;
+        scrollMotionDeltaX = 0;
+        scrollMotionDeltaY = 0;
+    }
+
+    // Accumulate scroll motion delta
+    scrollMotionDeltaX += deltaX;
+    scrollMotionDeltaY += deltaY;
+
+    // Track the time of the last scroll event
+    scrollMotionLastEventTime = now;
 
     // Update scroll totals
     scrollTotalX += Math.abs(deltaX);
@@ -177,17 +203,51 @@ function processAlternativeScroll(deltaX, deltaY, source) {
     if (totalXEl) totalXEl.textContent = scrollTotalX.toFixed(0);
     if (totalYEl) totalYEl.textContent = scrollTotalY.toFixed(0);
 
+    // Update status bar with current motion accumulation
+    updateScrollMotionDisplay(now - scrollMotionStartTime);
+
+    // Reset scroll motion end detection
+    clearTimeout(scrollMotionTimeout);
+    scrollMotionTimeout = setTimeout(() => {
+        // Motion ended - save the final values using last event time, not timeout time
+        lastScrollMotionDeltaX = scrollMotionDeltaX;
+        lastScrollMotionDeltaY = scrollMotionDeltaY;
+        lastScrollMotionDuration = scrollMotionLastEventTime - scrollMotionStartTime;
+
+        // Update display with final values
+        updateScrollMotionDisplay(lastScrollMotionDuration, true);
+
+        if (isBrowseModeActive()) {
+            addLogEntry(`scroll motion: Δ(${scrollMotionDeltaX.toFixed(0)}, ${scrollMotionDeltaY.toFixed(0)}) in ${lastScrollMotionDuration}ms`, 'scroll');
+        }
+        
+        // Reset motion tracking for next motion
+        scrollMotionTimeout = null;
+        scrollMotionStartTime = 0;
+    }, SCROLL_MOTION_END_DELAY);
+
     // Reset scroll end detection
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
         if (isScrolling) {
             isScrolling = false;
             if (isBrowseModeActive()) {
-                updateBrowseState('idle');
-                addBrowseLogEntry(`scroll end (${source})`, 'scroll');
+                setCurrentState('idle');
+                addLogEntry(`scroll end (${source})`, 'scroll');
             }
         }
     }, EVENT_END_DELAY);
+}
+
+// Update scroll motion display in status bar
+function updateScrollMotionDisplay(duration, isFinal = false) {
+    const barScroll = document.getElementById('bar-scroll');
+    if (barScroll) {
+        const dx = isFinal ? lastScrollMotionDeltaX : scrollMotionDeltaX;
+        const dy = isFinal ? lastScrollMotionDeltaY : scrollMotionDeltaY;
+        const dur = Math.round(duration);
+        barScroll.textContent = `Δ(${dx.toFixed(0)}, ${dy.toFixed(0)}) ${dur}ms`;
+    }
 }
 
 // Touch-based scroll detection (for VR controllers that emulate touch)
@@ -280,7 +340,182 @@ document.addEventListener('DOMContentLoaded', () => {
     initAlternativeScrollDetection();
     initTouchScrollDetection();
     initPointerScrollDetection();
+    initScrollPositionMonitoring();
 });
+
+// Scroll position monitoring for VR headsets
+// This detects scrolling by monitoring changes in scroll position
+// even when no scroll events are fired
+let lastScrollPositions = new Map();
+let scrollPositionMonitoringActive = false;
+let scrollPositionRAF = null;
+
+function initScrollPositionMonitoring() {
+    // Start monitoring when browse mode is active
+    scrollPositionMonitoringActive = true;
+    monitorScrollPositions();
+}
+
+function monitorScrollPositions() {
+    if (!scrollPositionMonitoringActive) return;
+
+    // Only monitor in browse mode
+    if (isBrowseModeActive()) {
+        // Get all scrollable elements in browse view
+        const browseViewEl = document.getElementById('browse-view');
+        const scrollableElements = [
+            browseViewEl,
+            document.querySelector('.wiki-article'),
+            document.querySelector('.wiki-content'),
+            document.querySelector('.mock-docs-sidebar'),
+            document.querySelector('.mock-docs-content'),
+            document.querySelector('.mock-browser-content'),
+            document.documentElement,
+            document.body
+        ].filter(el => el !== null);
+
+        scrollableElements.forEach(el => {
+            const key = el.id || el.className || 'body';
+            const currentTop = el.scrollTop;
+            const currentLeft = el.scrollLeft;
+
+            const lastPos = lastScrollPositions.get(key) || { top: currentTop, left: currentLeft };
+
+            const deltaY = currentTop - lastPos.top;
+            const deltaX = currentLeft - lastPos.left;
+
+            // If position changed, we detected a scroll
+            if (Math.abs(deltaY) > 0 || Math.abs(deltaX) > 0) {
+                // Log the detected scroll
+                console.log(`[VR Scroll] Position change detected on ${key}: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
+
+                // Process as a scroll event
+                processAlternativeScroll(deltaX, deltaY, 'position-monitor');
+            }
+
+            // Update last known position
+            lastScrollPositions.set(key, { top: currentTop, left: currentLeft });
+        });
+    }
+
+    // Continue monitoring
+    scrollPositionRAF = requestAnimationFrame(monitorScrollPositions);
+}
+
+// Also monitor window scroll position
+let lastWindowScrollX = window.scrollX;
+let lastWindowScrollY = window.scrollY;
+
+function checkWindowScroll() {
+    if (!isBrowseModeActive()) return;
+
+    const currentX = window.scrollX;
+    const currentY = window.scrollY;
+
+    const deltaX = currentX - lastWindowScrollX;
+    const deltaY = currentY - lastWindowScrollY;
+
+    if (Math.abs(deltaX) > 0 || Math.abs(deltaY) > 0) {
+        console.log(`[VR Scroll] Window position change: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
+        processAlternativeScroll(deltaX, deltaY, 'window-position');
+    }
+
+    lastWindowScrollX = currentX;
+    lastWindowScrollY = currentY;
+}
+
+// Check window scroll position periodically
+setInterval(checkWindowScroll, 50);
+
+// Add direct scroll event listeners to scrollable elements
+document.addEventListener('DOMContentLoaded', () => {
+    const scrollableSelectors = [
+        '#browse-view',
+        '.wiki-article',
+        '.wiki-content',
+        '.mock-docs-sidebar',
+        '.mock-docs-content'
+    ];
+
+    scrollableSelectors.forEach(selector => {
+        const el = document.querySelector(selector);
+        if (el) {
+            el.addEventListener('scroll', (e) => {
+                if (!isBrowseModeActive()) return;
+
+                const target = e.target;
+                const deltaY = e.target.scrollTop - (target._lastScrollTop || 0);
+                const deltaX = e.target.scrollLeft - (target._lastScrollLeft || 0);
+
+                if (Math.abs(deltaX) > 0 || Math.abs(deltaY) > 0) {
+                    console.log(`[Scroll Event] ${selector}: deltaX=${deltaX.toFixed(1)}, deltaY=${deltaY.toFixed(1)}`);
+                    processAlternativeScroll(deltaX, deltaY, 'scroll-event');
+                }
+
+                target._lastScrollTop = target.scrollTop;
+                target._lastScrollLeft = target.scrollLeft;
+            }, { passive: true });
+
+            console.log(`[Scroll Detection] Added scroll listener to ${selector}`);
+        }
+    });
+
+    // Also listen to the native scroll event on the browse-view
+    const browseView = document.getElementById('browse-view');
+    if (browseView) {
+        // Use capturing phase to catch all scroll events
+        browseView.addEventListener('scroll', (e) => {
+            if (!isBrowseModeActive()) return;
+            const scrollTop = browseView.scrollTop;
+            const scrollLeft = browseView.scrollLeft;
+
+            if (browseView._prevScrollTop === undefined) {
+                browseView._prevScrollTop = scrollTop;
+                browseView._prevScrollLeft = scrollLeft;
+            }
+
+            const deltaY = scrollTop - browseView._prevScrollTop;
+            const deltaX = scrollLeft - browseView._prevScrollLeft;
+
+            if (Math.abs(deltaX) > 0 || Math.abs(deltaY) > 0) {
+                console.log(`[Browse View Scroll] scrollTop=${scrollTop}, deltaY=${deltaY.toFixed(1)}`);
+                processAlternativeScroll(deltaX, deltaY, 'browse-scroll');
+            }
+
+            browseView._prevScrollTop = scrollTop;
+            browseView._prevScrollLeft = scrollLeft;
+        }, { capture: true, passive: true });
+    }
+});
+
+// Aggressive scroll position polling - checks every frame
+let lastBrowseScrollTop = 0;
+let lastBrowseScrollLeft = 0;
+
+function aggressiveScrollCheck() {
+    if (isBrowseModeActive()) {
+        const browseView = document.getElementById('browse-view');
+        if (browseView) {
+            const currentTop = browseView.scrollTop;
+            const currentLeft = browseView.scrollLeft;
+
+            const deltaY = currentTop - lastBrowseScrollTop;
+            const deltaX = currentLeft - lastBrowseScrollLeft;
+
+            if (Math.abs(deltaY) > 0.5 || Math.abs(deltaX) > 0.5) {
+                console.log(`[Aggressive Check] Browse view scroll detected: top=${currentTop}, deltaY=${deltaY.toFixed(1)}`);
+                processAlternativeScroll(deltaX, deltaY, 'aggressive-poll');
+            }
+
+            lastBrowseScrollTop = currentTop;
+            lastBrowseScrollLeft = currentLeft;
+        }
+    }
+    requestAnimationFrame(aggressiveScrollCheck);
+}
+
+// Start aggressive polling
+requestAnimationFrame(aggressiveScrollCheck);
 
 // Helper to get direction description
 function getDirDescription(dirX, dirY) {
@@ -311,15 +546,24 @@ document.addEventListener('wheel', (e) => {
         return;
     }
 
+    const now = Date.now();
     const currentDirX = e.deltaX > 0 ? 1 : (e.deltaX < 0 ? -1 : 0);
     const currentDirY = e.deltaY > 0 ? 1 : (e.deltaY < 0 ? -1 : 0);
 
-    // Detect scroll start
+    // Detect scroll start (for logging purposes)
     if (!isScrolling) {
         isScrolling = true;
         lastScrollDirX = currentDirX;
         lastScrollDirY = currentDirY;
         addLogEntry(`scroll start (X: ${Math.round(scrollTotalX)}, Y: ${Math.round(scrollTotalY)})`, 'scroll');
+    }
+
+    // Start new scroll motion tracking only if no motion is in progress
+    // (i.e., the motion timeout has fired or this is the first scroll)
+    if (scrollMotionStartTime === 0 || scrollMotionTimeout === null) {
+        scrollMotionStartTime = now;
+        scrollMotionDeltaX = 0;
+        scrollMotionDeltaY = 0;
     }
 
     // Detect direction change
@@ -336,15 +580,12 @@ document.addEventListener('wheel', (e) => {
     if (currentDirX !== 0) lastScrollDirX = currentDirX;
     if (currentDirY !== 0) lastScrollDirY = currentDirY;
 
-    // Clear existing timeout and set new one for scroll end detection
-    if (scrollTimeout) {
-        clearTimeout(scrollTimeout);
-    }
-    scrollTimeout = setTimeout(() => {
-        isScrolling = false;
-        lastScrollDirX = 0;
-        lastScrollDirY = 0;
-    }, EVENT_END_DELAY);
+    // Accumulate scroll motion delta
+    scrollMotionDeltaX += e.deltaX;
+    scrollMotionDeltaY += e.deltaY;
+
+    // Track the time of the last scroll event
+    scrollMotionLastEventTime = now;
 
     deltaX.textContent = Math.round(e.deltaX);
     deltaY.textContent = Math.round(e.deltaY);
@@ -354,6 +595,37 @@ document.addEventListener('wheel', (e) => {
 
     totalX.textContent = Math.round(scrollTotalX);
     totalY.textContent = Math.round(scrollTotalY);
+
+    // Update status bar with current motion accumulation
+    updateScrollMotionDisplay(now - scrollMotionStartTime);
+
+    // Reset scroll motion end detection
+    clearTimeout(scrollMotionTimeout);
+    scrollMotionTimeout = setTimeout(() => {
+        // Motion ended - save the final values using last event time, not timeout time
+        lastScrollMotionDeltaX = scrollMotionDeltaX;
+        lastScrollMotionDeltaY = scrollMotionDeltaY;
+        lastScrollMotionDuration = scrollMotionLastEventTime - scrollMotionStartTime;
+
+        // Update display with final values
+        updateScrollMotionDisplay(lastScrollMotionDuration, true);
+
+        addLogEntry(`scroll motion: Δ(${scrollMotionDeltaX.toFixed(0)}, ${scrollMotionDeltaY.toFixed(0)}) in ${lastScrollMotionDuration}ms`, 'scroll');
+        
+        // Reset motion tracking for next motion
+        scrollMotionTimeout = null;
+        scrollMotionStartTime = 0;
+    }, SCROLL_MOTION_END_DELAY);
+
+    // Clear existing timeout and set new one for scroll end detection
+    if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+    }
+    scrollTimeout = setTimeout(() => {
+        isScrolling = false;
+        lastScrollDirX = 0;
+        lastScrollDirY = 0;
+    }, EVENT_END_DELAY);
 }, { passive: false });
 
 resetScrollBtn.addEventListener('click', () => {
