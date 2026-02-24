@@ -1238,23 +1238,45 @@ clearBrowseLogBtn.addEventListener('click', () => {
 // Tab Navigation       //
 // ==================== //
 
+function switchToTab(targetTab) {
+    // Update active tab button
+    tabBtns.forEach(b => {
+        b.classList.remove('active');
+        if (b.dataset.tab === targetTab) {
+            b.classList.add('active');
+        }
+    });
+
+    // Update active view
+    views.forEach(view => {
+        view.classList.remove('active');
+        if (view.id === `${targetTab}-view`) {
+            view.classList.add('active');
+        }
+    });
+
+    // Save the current tab to localStorage
+    localStorage.setItem('lastOpenedTab', targetTab);
+}
+
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         const targetTab = btn.dataset.tab;
-
-        // Update active tab button
-        tabBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        // Update active view
-        views.forEach(view => {
-            view.classList.remove('active');
-            if (view.id === `${targetTab}-view`) {
-                view.classList.add('active');
-            }
-        });
+        switchToTab(targetTab);
     });
 });
+
+// Restore last opened tab on page load
+(function restoreLastTab() {
+    const lastTab = localStorage.getItem('lastOpenedTab');
+    if (lastTab) {
+        // Check if the tab exists
+        const tabExists = Array.from(tabBtns).some(btn => btn.dataset.tab === lastTab);
+        if (tabExists) {
+            switchToTab(lastTab);
+        }
+    }
+})();
 
 // ==================== //
 // Browse Mode State    //
@@ -4004,3 +4026,224 @@ if (resetShapeTestBtn) {
 } else {
     console.error('Reset button element NOT found!');
 }
+
+// ==================== //
+// Keyboard View        //
+// ==================== //
+
+// Typing test prompts - common sentences for typing practice
+const typingPrompts = [
+    "The quick brown fox jumps over the lazy dog.",
+    "Pack my box with five dozen liquor jugs.",
+    "How vexingly quick daft zebras jump!",
+    "The five boxing wizards jump quickly.",
+    "Sphinx of black quartz, judge my vow.",
+    "Two driven jocks help fax my big quiz.",
+    "The job requires extra pluck and zeal from every young wage earner.",
+    "A mad boxer shot a quick, gloved jab to the jaw of his dizzy opponent.",
+    "Whenever the black fox jumped the squirrel gazed suspiciously.",
+    "Crazy Frederick bought many very exquisite opal jewels.",
+    "We promptly judged antique ivory buckles for the next prize.",
+    "A quart jar of oil mixed with zinc oxide makes a very bright paint.",
+    "Grumpy wizards make toxic brew for the evil queen and jack.",
+    "The lazy major was fixing Cupid's broken quiver.",
+    "Jack quietly moved up front and seized the big ball of wax.",
+    "Few black taxis drive up major roads on quiet hazy nights.",
+    "Playing jazz vibe chords quickly excites my wife.",
+    "A large fawn jumped quickly over white zinc boxes.",
+    "Six big devils from Japan quickly forgot how to waltz.",
+    "Big July earthquakes confound zany experimental vow."
+];
+
+// Keyboard view elements
+const typingPromptEl = document.getElementById('typing-prompt');
+const typingInput = document.getElementById('typing-input');
+const typingAccuracyEl = document.getElementById('typing-accuracy');
+const typingProgressEl = document.getElementById('typing-progress');
+const newPromptBtn = document.getElementById('new-prompt-btn');
+const keyboardLogContent = document.getElementById('keyboard-log-content');
+const clearKeyboardLogBtn = document.getElementById('clear-keyboard-log');
+
+// Keyboard state
+let currentPrompt = '';
+let keyboardLogEntries = [];
+const MAX_KEYBOARD_LOG_ENTRIES = 100;
+const pressedKeys = new Set(); // Track currently pressed keys to avoid repeat logs
+
+function isKeyboardViewActive() {
+    const keyboardView = document.getElementById('keyboard-view');
+    return keyboardView && keyboardView.classList.contains('active');
+}
+
+function getRandomPrompt() {
+    const randomIndex = Math.floor(Math.random() * typingPrompts.length);
+    return typingPrompts[randomIndex];
+}
+
+function setNewPrompt() {
+    currentPrompt = getRandomPrompt();
+    if (typingPromptEl) {
+        typingPromptEl.textContent = currentPrompt;
+    }
+    if (typingInput) {
+        typingInput.value = '';
+    }
+    updateTypingStats();
+}
+
+function updateTypingStats() {
+    if (!typingInput || !currentPrompt) return;
+
+    const typed = typingInput.value;
+    const promptLength = currentPrompt.length;
+    const typedLength = typed.length;
+
+    // Calculate accuracy
+    let correctChars = 0;
+    for (let i = 0; i < typedLength; i++) {
+        if (typed[i] === currentPrompt[i]) {
+            correctChars++;
+        }
+    }
+    const accuracy = typedLength > 0 ? Math.round((correctChars / typedLength) * 100) : 100;
+
+    // Update display
+    if (typingAccuracyEl) {
+        typingAccuracyEl.textContent = `${accuracy}%`;
+        typingAccuracyEl.style.color = accuracy >= 90 ? '#4ade80' : accuracy >= 70 ? '#fbbf24' : '#f87171';
+    }
+    if (typingProgressEl) {
+        typingProgressEl.textContent = `${typedLength}/${promptLength}`;
+    }
+
+    // Check if completed
+    if (typedLength >= promptLength && accuracy === 100) {
+        setTimeout(() => {
+            setNewPrompt();
+        }, 500);
+    }
+}
+
+function addKeyboardLogEntry(event, eventType) {
+    if (!keyboardLogContent) return;
+
+    // Remove "empty" message if present
+    const emptyMsg = keyboardLogContent.querySelector('.log-empty');
+    if (emptyMsg) {
+        emptyMsg.remove();
+    }
+
+    // Build modifier string
+    const modifiers = [];
+    if (event.ctrlKey) modifiers.push('Ctrl');
+    if (event.altKey) modifiers.push('Alt');
+    if (event.shiftKey) modifiers.push('Shift');
+    if (event.metaKey) modifiers.push('Meta');
+    const modifierStr = modifiers.length > 0 ? modifiers.join(' + ') : '';
+
+    // Create log entry
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${eventType}`;
+
+    const keyDisplay = event.key === ' ' ? 'Space' : event.key;
+
+    entry.innerHTML = `
+        <span class="log-type">${eventType.toUpperCase()}</span>
+        <span class="log-key">${keyDisplay}</span>
+        <span class="log-code">Code: ${event.code}</span>
+        ${modifierStr ? `<span class="log-modifiers">${modifierStr}</span>` : ''}
+    `;
+
+    // Insert at the top
+    keyboardLogContent.insertBefore(entry, keyboardLogContent.firstChild);
+
+    // Limit entries
+    keyboardLogEntries.unshift(entry);
+    while (keyboardLogEntries.length > MAX_KEYBOARD_LOG_ENTRIES) {
+        const removed = keyboardLogEntries.pop();
+        if (removed.parentNode) {
+            removed.parentNode.removeChild(removed);
+        }
+    }
+}
+
+function highlightKey(code, active) {
+    const keyEl = document.querySelector(`.key[data-key="${code}"]`);
+    if (keyEl) {
+        if (active) {
+            keyEl.classList.add('active');
+        } else {
+            keyEl.classList.remove('active');
+        }
+    }
+}
+
+function clearKeyboardLog() {
+    if (!keyboardLogContent) return;
+    keyboardLogContent.innerHTML = '<div class="log-empty">Press any key to see events</div>';
+    keyboardLogEntries = [];
+}
+
+// Keyboard event listeners
+document.addEventListener('keydown', (e) => {
+    // Always highlight the key and log the event when keyboard view is active
+    if (isKeyboardViewActive()) {
+        // Prevent Alt from activating browser menu and Tab from navigating browser UI
+        if (e.key === 'Alt' || e.key === 'Tab' || e.altKey || e.code === 'Tab') {
+            e.preventDefault();
+        }
+
+        highlightKey(e.code, true);
+
+        // Only log the first keydown event, not repeats when key is held
+        if (!pressedKeys.has(e.code)) {
+            pressedKeys.add(e.code);
+            addKeyboardLogEntry(e, 'keydown');
+        }
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (isKeyboardViewActive()) {
+        // Prevent Alt from activating browser menu
+        if (e.key === 'Alt' || e.altKey) {
+            e.preventDefault();
+        }
+
+        highlightKey(e.code, false);
+        pressedKeys.delete(e.code);
+        addKeyboardLogEntry(e, 'keyup');
+    }
+});
+
+// Typing input event listener
+if (typingInput) {
+    typingInput.addEventListener('input', () => {
+        updateTypingStats();
+    });
+
+    // Handle Enter key to submit current prompt
+    typingInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            setNewPrompt();
+        }
+    });
+}
+
+// New prompt button
+if (newPromptBtn) {
+    newPromptBtn.addEventListener('click', () => {
+        setNewPrompt();
+    });
+}
+
+// Clear keyboard log button
+if (clearKeyboardLogBtn) {
+    clearKeyboardLogBtn.addEventListener('click', () => {
+        clearKeyboardLog();
+    });
+}
+
+// Initialize keyboard view with a random prompt
+setNewPrompt();
