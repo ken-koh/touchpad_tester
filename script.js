@@ -1699,11 +1699,30 @@ mapViewport.addEventListener('mousedown', (e) => {
     mapsDraggingEl.textContent = 'Yes';
     isDragging = true;
     isMouseButtonDown = true;
-    setMapsState('move');
+    setMapsState('drag');
     setCurrentState('drag');
     addMapsLogEntry('drag start', 'pointer');
 
     e.preventDefault();
+});
+
+// Mouse move on map viewport (not dragging)
+let mapsMoveTimeout = null;
+mapViewport.addEventListener('mousemove', (e) => {
+    if (!isMapsModeActive()) return;
+    if (mapIsDragging) return; // Don't show move when dragging
+    
+    setMapsState('move');
+    
+    // Reset to idle after a short delay
+    if (mapsMoveTimeout) {
+        clearTimeout(mapsMoveTimeout);
+    }
+    mapsMoveTimeout = setTimeout(() => {
+        if (!mapIsDragging) {
+            setMapsState('idle');
+        }
+    }, 150);
 });
 
 document.addEventListener('mousemove', (e) => {
