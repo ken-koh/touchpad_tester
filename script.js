@@ -4133,6 +4133,15 @@ function addKeyboardLogEntry(event, eventType) {
         emptyMsg.remove();
     }
 
+    // Get timestamp
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
     // Build modifier string
     const modifiers = [];
     if (event.ctrlKey) modifiers.push('Ctrl');
@@ -4148,6 +4157,7 @@ function addKeyboardLogEntry(event, eventType) {
     const keyDisplay = event.key === ' ' ? 'Space' : event.key;
 
     entry.innerHTML = `
+        <span class="log-timestamp">${timestamp}</span>
         <span class="log-type">${eventType.toUpperCase()}</span>
         <span class="log-key">${keyDisplay}</span>
         <span class="log-code">Code: ${event.code}</span>
