@@ -28,6 +28,7 @@
         <button class="tab-btn" data-tab="graph">Graph View</button>
         <button class="tab-btn" data-tab="shapes">Shape Tests</button>
         <button class="tab-btn" data-tab="keyboard">Keyboard</button>
+        <button class="tab-btn" data-tab="keylog">Key Log</button>
     </nav>
 
     <!-- Debug Dashboard View -->
@@ -1190,6 +1191,19 @@
                 <div id="keyboard-log-content" class="event-log-content">
                     <div class="log-empty">Press any key to see events</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Log View -->
+    <div id="keylog-view" class="view">
+        <div class="keylog-container">
+            <div class="keylog-header">
+                <h2>Key Event Log</h2>
+                <button id="clear-keylog" class="clear-log-btn">Clear</button>
+            </div>
+            <div id="keylog-content" class="keylog-content">
+                <div class="log-empty">Press any key to see events</div>
             </div>
         </div>
     </div>

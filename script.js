@@ -4083,16 +4083,21 @@ const typingProgressEl = document.getElementById('typing-progress');
 const newPromptBtn = document.getElementById('new-prompt-btn');
 const keyboardLogContent = document.getElementById('keyboard-log-content');
 const clearKeyboardLogBtn = document.getElementById('clear-keyboard-log');
+const keylogContent = document.getElementById('keylog-content');
+const clearKeylogBtn = document.getElementById('clear-keylog');
 
 // Keyboard state
 let currentPrompt = '';
 let keyboardLogEntries = [];
+let keylogEntries = [];
 const MAX_KEYBOARD_LOG_ENTRIES = 100;
 const pressedKeys = new Set(); // Track currently pressed keys to avoid repeat logs
 
 function isKeyboardViewActive() {
     const keyboardView = document.getElementById('keyboard-view');
-    return keyboardView && keyboardView.classList.contains('active');
+    const keylogView = document.getElementById('keylog-view');
+    return (keyboardView && keyboardView.classList.contains('active')) ||
+           (keylogView && keylogView.classList.contains('active'));
 }
 
 function getRandomPrompt() {
@@ -4145,24 +4150,16 @@ function updateTypingStats() {
 }
 
 function addKeyboardLogEntry(event, eventType) {
-    if (!keyboardLogContent) return;
+    const timestamp = (() => {
+        const now = new Date();
+        return now.toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+    })();
 
-    // Remove "empty" message if present
-    const emptyMsg = keyboardLogContent.querySelector('.log-empty');
-    if (emptyMsg) {
-        emptyMsg.remove();
-    }
-
-    // Get timestamp
-    const now = new Date();
-    const timestamp = now.toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
-
-    // Build modifier string
     const modifiers = [];
     if (event.ctrlKey) modifiers.push('Ctrl');
     if (event.altKey) modifiers.push('Alt');
@@ -4170,13 +4167,9 @@ function addKeyboardLogEntry(event, eventType) {
     if (event.metaKey) modifiers.push('Meta');
     const modifierStr = modifiers.length > 0 ? modifiers.join(' + ') : '';
 
-    // Create log entry
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${eventType}`;
-
     const keyDisplay = event.key === ' ' ? 'Space' : event.key;
 
-    entry.innerHTML = `
+    const html = `
         <span class="log-timestamp">${timestamp}</span>
         <span class="log-type">${eventType.toUpperCase()}</span>
         <span class="log-key">${keyDisplay}</span>
@@ -4184,15 +4177,37 @@ function addKeyboardLogEntry(event, eventType) {
         ${modifierStr ? `<span class="log-modifiers">${modifierStr}</span>` : ''}
     `;
 
-    // Insert at the top
-    keyboardLogContent.insertBefore(entry, keyboardLogContent.firstChild);
+    // Add to keyboard sidebar log
+    if (keyboardLogContent) {
+        const emptyMsg = keyboardLogContent.querySelector('.log-empty');
+        if (emptyMsg) emptyMsg.remove();
 
-    // Limit entries
-    keyboardLogEntries.unshift(entry);
-    while (keyboardLogEntries.length > MAX_KEYBOARD_LOG_ENTRIES) {
-        const removed = keyboardLogEntries.pop();
-        if (removed.parentNode) {
-            removed.parentNode.removeChild(removed);
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${eventType}`;
+        entry.innerHTML = html;
+        keyboardLogContent.insertBefore(entry, keyboardLogContent.firstChild);
+
+        keyboardLogEntries.unshift(entry);
+        while (keyboardLogEntries.length > MAX_KEYBOARD_LOG_ENTRIES) {
+            const removed = keyboardLogEntries.pop();
+            if (removed.parentNode) removed.parentNode.removeChild(removed);
+        }
+    }
+
+    // Add to keylog view
+    if (keylogContent) {
+        const emptyMsg = keylogContent.querySelector('.log-empty');
+        if (emptyMsg) emptyMsg.remove();
+
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${eventType}`;
+        entry.innerHTML = html;
+        keylogContent.insertBefore(entry, keylogContent.firstChild);
+
+        keylogEntries.unshift(entry);
+        while (keylogEntries.length > MAX_KEYBOARD_LOG_ENTRIES) {
+            const removed = keylogEntries.pop();
+            if (removed.parentNode) removed.parentNode.removeChild(removed);
         }
     }
 }
@@ -4270,9 +4285,17 @@ function highlightKey(code, key, active) {
 }
 
 function clearKeyboardLog() {
-    if (!keyboardLogContent) return;
-    keyboardLogContent.innerHTML = '<div class="log-empty">Press any key to see events</div>';
-    keyboardLogEntries = [];
+    if (keyboardLogContent) {
+        keyboardLogContent.innerHTML = '<div class="log-empty">Press any key to see events</div>';
+        keyboardLogEntries = [];
+    }
+}
+
+function clearKeylog() {
+    if (keylogContent) {
+        keylogContent.innerHTML = '<div class="log-empty">Press any key to see events</div>';
+        keylogEntries = [];
+    }
 }
 
 // Keyboard event listeners
@@ -4333,6 +4356,13 @@ if (newPromptBtn) {
 if (clearKeyboardLogBtn) {
     clearKeyboardLogBtn.addEventListener('click', () => {
         clearKeyboardLog();
+    });
+}
+
+// Clear keylog view button
+if (clearKeylogBtn) {
+    clearKeylogBtn.addEventListener('click', () => {
+        clearKeylog();
     });
 }
 
