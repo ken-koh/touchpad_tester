@@ -1200,7 +1200,21 @@
         <div class="keylog-container">
             <div class="keylog-header">
                 <h2>Key Event Log</h2>
-                <button id="clear-keylog" class="clear-log-btn">Clear</button>
+                <div class="keylog-header-controls">
+                    <label class="keylog-toggle">
+                        <input type="checkbox" id="keylog-show-input-events" checked>
+                        <span>Input events</span>
+                    </label>
+                    <label class="keylog-toggle">
+                        <input type="checkbox" id="keylog-show-key-events" checked>
+                        <span>Key events</span>
+                    </label>
+                    <button id="clear-keylog" class="clear-log-btn">Clear</button>
+                </div>
+            </div>
+            <div class="keylog-input-area">
+                <label for="keylog-input">Type here (captures input even when keydown/keyup don't fire):</label>
+                <input type="text" id="keylog-input" class="keylog-text-input" placeholder="Tap here and type..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div id="keylog-content" class="keylog-content">
                 <div class="log-empty">Press any key to see events</div>

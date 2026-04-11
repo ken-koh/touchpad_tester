@@ -4332,8 +4332,33 @@ document.addEventListener('keyup', (e) => {
 
 // Typing input event listener
 if (typingInput) {
-    typingInput.addEventListener('input', () => {
+    typingInput.addEventListener('input', (e) => {
         updateTypingStats();
+
+        // Fallback for Unity WebViews: if keydown/keyup don't fire,
+        // use input events to highlight keys and log
+        if (isKeyboardViewActive() && e.data) {
+            for (const char of e.data) {
+                highlightKey('', char, true);
+                addKeyboardLogEntry(
+                    { key: char, code: '', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false },
+                    'input'
+                );
+                // Brief flash — remove highlight after a short delay
+                setTimeout(() => highlightKey('', char, false), 150);
+            }
+        }
+    });
+
+    // beforeinput — log if keydown didn't fire (WebView fallback)
+    typingInput.addEventListener('beforeinput', (e) => {
+        if (!isKeyboardViewActive()) return;
+        if (e.data) {
+            addKeyboardLogEntry(
+                { key: `[beforeinput] ${e.inputType}: "${e.data}"`, code: '', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false },
+                'beforeinput'
+            );
+        }
     });
 
     // Handle Enter key to submit current prompt
@@ -4364,6 +4389,120 @@ if (clearKeylogBtn) {
     clearKeylogBtn.addEventListener('click', () => {
         clearKeylog();
     });
+}
+
+// ============================== //
+// Key Log View: Input Fallbacks  //
+// ============================== //
+
+const keylogInput = document.getElementById('keylog-input');
+const keylogShowInputEvents = document.getElementById('keylog-show-input-events');
+const keylogShowKeyEvents = document.getElementById('keylog-show-key-events');
+
+function addKeylogOnlyEntry(eventType, detail, source) {
+    if (!keylogContent) return;
+
+    const emptyMsg = keylogContent.querySelector('.log-empty');
+    if (emptyMsg) emptyMsg.remove();
+
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${source}`;
+    entry.innerHTML = `
+        <span class="log-timestamp">${timestamp}</span>
+        <span class="log-type">${eventType}</span>
+        <span class="log-key">${detail}</span>
+    `;
+
+    keylogContent.insertBefore(entry, keylogContent.firstChild);
+
+    keylogEntries.unshift(entry);
+    while (keylogEntries.length > MAX_KEYBOARD_LOG_ENTRIES) {
+        const removed = keylogEntries.pop();
+        if (removed.parentNode) removed.parentNode.removeChild(removed);
+    }
+}
+
+function isKeylogViewActive() {
+    const keylogView = document.getElementById('keylog-view');
+    return keylogView && keylogView.classList.contains('active');
+}
+
+if (keylogInput) {
+    // input event — fires in Unity WebViews when text is injected
+    keylogInput.addEventListener('input', (e) => {
+        if (!isKeylogViewActive()) return;
+        if (keylogShowInputEvents && !keylogShowInputEvents.checked) return;
+        const data = e.data !== null && e.data !== undefined ? `"${e.data}"` : '(null)';
+        addKeylogOnlyEntry('INPUT', `data: ${data} | type: ${e.inputType || '-'}`, 'input-event');
+    });
+
+    // beforeinput event — fires before text modification
+    keylogInput.addEventListener('beforeinput', (e) => {
+        if (!isKeylogViewActive()) return;
+        if (keylogShowInputEvents && !keylogShowInputEvents.checked) return;
+        const data = e.data !== null && e.data !== undefined ? `"${e.data}"` : '(null)';
+        addKeylogOnlyEntry('BEFOREINPUT', `data: ${data} | type: ${e.inputType || '-'}`, 'input-event');
+    });
+
+    // textInput event (non-standard but used by some WebViews)
+    keylogInput.addEventListener('textInput', (e) => {
+        if (!isKeylogViewActive()) return;
+        if (keylogShowInputEvents && !keylogShowInputEvents.checked) return;
+        const data = e.data !== null && e.data !== undefined ? `"${e.data}"` : '(null)';
+        addKeylogOnlyEntry('TEXTINPUT', `data: ${data}`, 'input-event');
+    });
+
+    // Composition events — fired by IME / some virtual keyboards
+    keylogInput.addEventListener('compositionstart', (e) => {
+        if (!isKeylogViewActive()) return;
+        if (keylogShowInputEvents && !keylogShowInputEvents.checked) return;
+        addKeylogOnlyEntry('COMP_START', `data: "${e.data || ''}"`, 'input-event');
+    });
+    keylogInput.addEventListener('compositionupdate', (e) => {
+        if (!isKeylogViewActive()) return;
+        if (keylogShowInputEvents && !keylogShowInputEvents.checked) return;
+        addKeylogOnlyEntry('COMP_UPDATE', `data: "${e.data || ''}"`, 'input-event');
+    });
+    keylogInput.addEventListener('compositionend', (e) => {
+        if (!isKeylogViewActive()) return;
+        if (keylogShowInputEvents && !keylogShowInputEvents.checked) return;
+        addKeylogOnlyEntry('COMP_END', `data: "${e.data || ''}"`, 'input-event');
+    });
+
+    // keydown/keyup on the input itself — these may fire even when document-level ones don't
+    keylogInput.addEventListener('keydown', (e) => {
+        if (!isKeylogViewActive()) return;
+        if (keylogShowKeyEvents && !keylogShowKeyEvents.checked) return;
+        const keyDisplay = e.key === ' ' ? 'Space' : (e.key || '?');
+        addKeylogOnlyEntry('KEYDOWN', `key: ${keyDisplay} | code: ${e.code || '-'}`, 'keydown');
+        highlightKey(e.code, e.key, true);
+    });
+    keylogInput.addEventListener('keyup', (e) => {
+        if (!isKeylogViewActive()) return;
+        if (keylogShowKeyEvents && !keylogShowKeyEvents.checked) return;
+        const keyDisplay = e.key === ' ' ? 'Space' : (e.key || '?');
+        addKeylogOnlyEntry('KEYUP', `key: ${keyDisplay} | code: ${e.code || '-'}`, 'keyup');
+        highlightKey(e.code, e.key, false);
+    });
+
+    // Auto-focus the input when switching to the keylog tab
+    const observer = new MutationObserver(() => {
+        if (isKeylogViewActive()) {
+            keylogInput.focus();
+        }
+    });
+    const keylogView = document.getElementById('keylog-view');
+    if (keylogView) {
+        observer.observe(keylogView, { attributes: true, attributeFilter: ['class'] });
+    }
 }
 
 // Initialize keyboard view with a random prompt

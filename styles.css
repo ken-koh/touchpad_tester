@@ -2554,6 +2554,17 @@ h2 {
     background: #fef2f2;
 }
 
+.keyboard-event-log .log-entry.input,
+.keyboard-event-log .log-entry.beforeinput {
+    border-left-color: #7c3aed;
+    background: #f5f3ff;
+}
+
+.keyboard-event-log .log-entry.input .log-type,
+.keyboard-event-log .log-entry.beforeinput .log-type {
+    color: #7c3aed;
+}
+
 .keyboard-event-log .log-entry .log-type {
     font-weight: bold;
     margin-right: 8px;
@@ -2691,6 +2702,57 @@ h2 {
     font-size: 1.1rem;
 }
 
+.keylog-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.keylog-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #94a3b8;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.keylog-toggle input[type="checkbox"] {
+    accent-color: #60a5fa;
+}
+
+.keylog-input-area {
+    padding: 10px 20px;
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.keylog-input-area label {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.keylog-text-input {
+    flex: 1;
+    padding: 8px 12px;
+    background: #1a1a2e;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    color: #e2e8f0;
+    font-size: 1rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    outline: none;
+}
+
+.keylog-text-input:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
 .keylog-content {
     flex: 1;
     overflow-y: auto;
@@ -2721,6 +2783,10 @@ h2 {
 
 .keylog-content .log-entry.keyup {
     border-left: 3px solid #f87171;
+}
+
+.keylog-content .log-entry.input-event {
+    border-left: 3px solid #a78bfa;
 }
 
 .keylog-content .log-entry .log-timestamp {
