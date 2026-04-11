@@ -1266,11 +1266,12 @@ tabBtns.forEach(btn => {
     });
 });
 
-// Restore last opened tab on page load
+// Restore tab on page load: URL parameter takes priority, then localStorage
 (function restoreLastTab() {
-    const lastTab = localStorage.getItem('lastOpenedTab');
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTab = urlParams.get('tab');
+    const lastTab = urlTab || localStorage.getItem('lastOpenedTab');
     if (lastTab) {
-        // Check if the tab exists
         const tabExists = Array.from(tabBtns).some(btn => btn.dataset.tab === lastTab);
         if (tabExists) {
             switchToTab(lastTab);
@@ -1711,9 +1712,9 @@ let mapsMoveTimeout = null;
 mapViewport.addEventListener('mousemove', (e) => {
     if (!isMapsModeActive()) return;
     if (mapIsDragging) return; // Don't show move when dragging
-    
+
     setMapsState('move');
-    
+
     // Reset to idle after a short delay
     if (mapsMoveTimeout) {
         clearTimeout(mapsMoveTimeout);
@@ -4196,8 +4197,69 @@ function addKeyboardLogEntry(event, eventType) {
     }
 }
 
-function highlightKey(code, active) {
-    const keyEl = document.querySelector(`.key[data-key="${code}"]`);
+function highlightKey(code, key, active) {
+    // Try matching by code first (physical key), then fall back to key value
+    // VR headsets and virtual keyboards often send empty or "Unidentified" codes
+    let keyEl = code ? document.querySelector(`.key[data-key="${code}"]`) : null;
+    if (!keyEl && key) {
+        // Map event.key values to data-key attributes
+        const keyMap = {
+            ' ': 'Space',
+            'Escape': 'Escape',
+            'Enter': 'Enter',
+            'Tab': 'Tab',
+            'Backspace': 'Backspace',
+            'CapsLock': 'CapsLock',
+            'Shift': 'ShiftLeft',
+            'Control': 'ControlLeft',
+            'Alt': 'AltLeft',
+            'Meta': 'MetaLeft',
+            'ContextMenu': 'ContextMenu',
+            'ArrowUp': 'ArrowUp',
+            'ArrowDown': 'ArrowDown',
+            'ArrowLeft': 'ArrowLeft',
+            'ArrowRight': 'ArrowRight',
+        };
+        const mappedCode = keyMap[key];
+        if (mappedCode) {
+            keyEl = document.querySelector(`.key[data-key="${mappedCode}"]`);
+        } else if (key.length === 1) {
+            // Single character — try to find it by matching key codes
+            const upper = key.toUpperCase();
+            // Letters: data-key="KeyA" etc.
+            if (upper >= 'A' && upper <= 'Z') {
+                keyEl = document.querySelector(`.key[data-key="Key${upper}"]`);
+            }
+            // Digits: data-key="Digit0" etc.
+            else if (upper >= '0' && upper <= '9') {
+                keyEl = document.querySelector(`.key[data-key="Digit${upper}"]`);
+            }
+            // Punctuation: match by text content
+            else {
+                const charMap = {
+                    '`': 'Backquote', '~': 'Backquote',
+                    '-': 'Minus', '_': 'Minus',
+                    '=': 'Equal', '+': 'Equal',
+                    '[': 'BracketLeft', '{': 'BracketLeft',
+                    ']': 'BracketRight', '}': 'BracketRight',
+                    '\\': 'Backslash', '|': 'Backslash',
+                    ';': 'Semicolon', ':': 'Semicolon',
+                    "'": 'Quote', '"': 'Quote',
+                    ',': 'Comma', '<': 'Comma',
+                    '.': 'Period', '>': 'Period',
+                    '/': 'Slash', '?': 'Slash',
+                };
+                const mapped = charMap[key];
+                if (mapped) {
+                    keyEl = document.querySelector(`.key[data-key="${mapped}"]`);
+                }
+            }
+        }
+        // Function keys: F1-F12
+        else if (/^F\d{1,2}$/.test(key)) {
+            keyEl = document.querySelector(`.key[data-key="${key}"]`);
+        }
+    }
     if (keyEl) {
         if (active) {
             keyEl.classList.add('active');
@@ -4222,7 +4284,7 @@ document.addEventListener('keydown', (e) => {
             e.preventDefault();
         }
 
-        highlightKey(e.code, true);
+        highlightKey(e.code, e.key, true);
 
         // Only log the first keydown event, not repeats when key is held
         if (!pressedKeys.has(e.code)) {
@@ -4239,7 +4301,7 @@ document.addEventListener('keyup', (e) => {
             e.preventDefault();
         }
 
-        highlightKey(e.code, false);
+        highlightKey(e.code, e.key, false);
         pressedKeys.delete(e.code);
         addKeyboardLogEntry(e, 'keyup');
     }
